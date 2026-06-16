@@ -104,12 +104,16 @@ struct SmallWidgetView: View {
                     .contentTransition(.opacity)
                     .id("small-title-\(track.id)")
                 if s.showArtist {
-                    Text(track.artist)
-                        .font(.system(size: 10, design: .rounded))
-                        .foregroundStyle(.white.opacity(0.6))
-                        .lineLimit(1)
-                        .contentTransition(.opacity)
-                        .id("small-artist-\(track.id)")
+                    if track.artist.isEmpty {
+                        LoadingBar(width: 48, height: 7)
+                    } else {
+                        Text(track.artist)
+                            .font(.system(size: 10, design: .rounded))
+                            .foregroundStyle(.white.opacity(0.6))
+                            .lineLimit(1)
+                            .contentTransition(.opacity)
+                            .id("small-artist-\(track.id)")
+                    }
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -167,12 +171,16 @@ struct MediumWidgetView: View {
                             .contentTransition(.opacity)
                             .id("med-title-\(track.id)")
                         if s.showArtist {
-                            Text(track.artist)
-                                .font(.system(size: 12, design: .rounded))
-                                .foregroundStyle(.white.opacity(0.6))
-                                .lineLimit(1)
-                                .contentTransition(.opacity)
-                                .id("med-artist-\(track.id)")
+                            if track.artist.isEmpty {
+                                LoadingBar(width: 80, height: 9)
+                            } else {
+                                Text(track.artist)
+                                    .font(.system(size: 12, design: .rounded))
+                                    .foregroundStyle(.white.opacity(0.6))
+                                    .lineLimit(1)
+                                    .contentTransition(.opacity)
+                                    .id("med-artist-\(track.id)")
+                            }
                         }
                     }
 
@@ -237,14 +245,18 @@ struct LargeWidgetView: View {
                     .contentTransition(.opacity)
                     .id("lg-title-\(track.id)")
                 if s.showArtist {
-                    Text(track.artist)
-                        .font(.system(size: 14, design: .rounded))
-                        .foregroundStyle(.white.opacity(0.75))
-                        .lineLimit(1)
-                        .padding(.top, 2)
-                        .shadow(color: .black.opacity(0.5), radius: 3, y: 1)
-                        .contentTransition(.opacity)
-                        .id("lg-artist-\(track.id)")
+                    if track.artist.isEmpty {
+                        LoadingBar(width: 120, height: 11).padding(.top, 6)
+                    } else {
+                        Text(track.artist)
+                            .font(.system(size: 14, design: .rounded))
+                            .foregroundStyle(.white.opacity(0.75))
+                            .lineLimit(1)
+                            .padding(.top, 2)
+                            .shadow(color: .black.opacity(0.5), radius: 3, y: 1)
+                            .contentTransition(.opacity)
+                            .id("lg-artist-\(track.id)")
+                    }
                 }
 
                 HStack(spacing: 16) {
@@ -469,28 +481,29 @@ struct ArtworkSquare: View {
     }
 }
 
+/// Плейсхолдер обложки = состояние «загрузка» (трек играет, обложка ещё едет).
+/// Виджеты не анимируют, поэтому статичный «скелет»: мягкий фон + нотка.
 struct YMPlaceholder: View {
     var body: some View {
         ZStack {
-            RadialGradient(
-                colors: [
-                    Color(red: 0.22, green: 0.08, blue: 0.02),
-                    Color(red: 0.07, green: 0.07, blue: 0.07)
-                ],
-                center: .center,
-                startRadius: 10,
-                endRadius: 110
+            LinearGradient(
+                colors: [Color.ymCard, Color.ymDark],
+                startPoint: .topLeading, endPoint: .bottomTrailing
             )
-            VStack(spacing: 4) {
-                Text("Я")
-                    .font(.system(size: 52, weight: .black))
-                    .foregroundStyle(Color.ymYellow)
-                Text(tr("Музыка", "Music"))
-                    .font(.system(size: 11, weight: .medium))
-                    .foregroundStyle(Color.white.opacity(0.38))
-                    .tracking(2.5)
-            }
+            Image(systemName: "music.note")
+                .font(.system(size: 30, weight: .semibold))
+                .foregroundStyle(Color.white.opacity(0.22))
         }
+    }
+}
+
+/// Серая «загрузочная» полоса вместо имени исполнителя, пока он не пришёл.
+struct LoadingBar: View {
+    var width: CGFloat
+    var height: CGFloat
+    var body: some View {
+        Capsule().fill(Color.white.opacity(0.16))
+            .frame(width: width, height: height)
     }
 }
 
