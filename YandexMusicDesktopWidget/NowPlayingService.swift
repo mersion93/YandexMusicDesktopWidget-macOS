@@ -579,20 +579,12 @@ final class NowPlayingService: ObservableObject {
             lastSignificantPlaying = track.isPlaying
             lastArtworkPresent     = (track.artworkData != nil)
             lastSignificantLike    = track.likeState
-            // На СМЕНЕ трека (если ждём HD из API) в виджет родную низкокачественную
-            // обложку НЕ пишем — на большом full-bleed она мылит. Показываем чистый
-            // плейсхолдер, пока не придёт HD (как маска исполнителя). Попап/окно берут
-            // обложку из currentTrack (там она мелкая — родная норм).
-            let expectingHD = idChanged && track.isYandex && YandexMusicAPI.shared.isAuthorized
+            // ФОТО ВСЕГДА СРАЗУ: если HD уже в кэше — ставим её; иначе показываем
+            // родную обложку (она приходит вместе с названием), а HD плавно дорисуется
+            // через cacheAndApplyHD. Так на всех треках фото+название появляются разом.
             var widgetTrack = track
-            if expectingHD {
-                // Если HD уже в кэше (трек играл) — ставим её СРАЗУ, без плейсхолдера.
-                if let apiId = apiTrackIdMap[apiKey(track)], let hd = hdCoverCache[apiId] {
-                    widgetTrack.artworkData = hd
-                } else {
-                    widgetTrack.artworkData = nil      // ждём HD
-                    scheduleWidgetNativeFallback(for: track)
-                }
+            if let apiId = apiTrackIdMap[apiKey(track)], let hd = hdCoverCache[apiId] {
+                widgetTrack.artworkData = hd
             }
             AppGroupManager.shared.saveTrack(widgetTrack)
             AppGroupManager.shared.saveSyncStatus(.synced)
