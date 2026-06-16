@@ -11,18 +11,15 @@
 		AA0000000000000000000302 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000000000000000000102 /* ContentView.swift */; };
 		AA0000000000000000000303 /* MediaKeyController.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000000000000000000103 /* MediaKeyController.swift */; };
 		AA0000000000000000000304 /* NowPlayingService.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000000000000000000104 /* NowPlayingService.swift */; };
-		AA0000000000000000000305 /* WidgetDataStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000000000000000000105 /* WidgetDataStore.swift */; };
 		AA0000000000000000000306 /* Constants.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000000000000000000121 /* Constants.swift */; };
 		AA0000000000000000000307 /* SharedModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000000000000000000122 /* SharedModels.swift */; };
 		AA0000000000000000000308 /* AppGroupManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000000000000000000123 /* AppGroupManager.swift */; };
 		AA0000000000000000000309 /* MediaRemoteHelper.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000000000000000000124 /* MediaRemoteHelper.swift */; };
 		AA000000000000000000030A /* YMTrackReader.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000000000000000000010A /* YMTrackReader.swift */; };
 		AA000000000000000000030B /* YMActionController.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000000000000000000010B /* YMActionController.swift */; };
-		AA000000000000000000030C /* ArtworkFetcher.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000000000000000000010C /* ArtworkFetcher.swift */; };
 		AA000000000000000000030D /* YMAccessibilityObserver.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000000000000000000010D /* YMAccessibilityObserver.swift */; };
 		AA000000000000000000040D /* YandexMusicAPI.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000000000000000000020D /* YandexMusicAPI.swift */; };
 		AA000000000000000000050D /* NowPlayingStreamer.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000000000000000000060D /* NowPlayingStreamer.swift */; };
-		AA000000000000000000070D /* LicenseManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000000000000000000080D /* LicenseManager.swift */; };
 		AA000000000000000000090D /* MainWindowView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000000000000000000A0D /* MainWindowView.swift */; };
 		AA0000000000000000000310 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = AA0000000000000000000108 /* Assets.xcassets */; };
 		AA0000000000000000000311 /* DesktopMusicWidgetBundle.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000000000000000000111 /* DesktopMusicWidgetBundle.swift */; };
@@ -65,17 +62,14 @@
 		AA0000000000000000000102 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
 		AA0000000000000000000103 /* MediaKeyController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MediaKeyController.swift; sourceTree = "<group>"; };
 		AA0000000000000000000104 /* NowPlayingService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NowPlayingService.swift; sourceTree = "<group>"; };
-		AA0000000000000000000105 /* WidgetDataStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WidgetDataStore.swift; sourceTree = "<group>"; };
 		AA0000000000000000000106 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		AA0000000000000000000107 /* YandexMusicDesktopWidget.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = YandexMusicDesktopWidget.entitlements; sourceTree = "<group>"; };
 		AA0000000000000000000108 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		AA000000000000000000010A /* YMTrackReader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = YMTrackReader.swift; sourceTree = "<group>"; };
 		AA000000000000000000010B /* YMActionController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = YMActionController.swift; sourceTree = "<group>"; };
-		AA000000000000000000010C /* ArtworkFetcher.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ArtworkFetcher.swift; sourceTree = "<group>"; };
 		AA000000000000000000010D /* YMAccessibilityObserver.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = YMAccessibilityObserver.swift; sourceTree = "<group>"; };
 		AA000000000000000000020D /* YandexMusicAPI.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = YandexMusicAPI.swift; sourceTree = "<group>"; };
 		AA000000000000000000060D /* NowPlayingStreamer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NowPlayingStreamer.swift; sourceTree = "<group>"; };
-		AA000000000000000000080D /* LicenseManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LicenseManager.swift; sourceTree = "<group>"; };
 		AA0000000000000000000A0D /* MainWindowView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MainWindowView.swift; sourceTree = "<group>"; };
 		AA0000000000000000000111 /* DesktopMusicWidgetBundle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DesktopMusicWidgetBundle.swift; sourceTree = "<group>"; };
 		AA0000000000000000000112 /* DesktopMusicWidget.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DesktopMusicWidget.swift; sourceTree = "<group>"; };
@@ -135,14 +129,11 @@
 				AA0000000000000000000102 /* ContentView.swift */,
 				AA0000000000000000000103 /* MediaKeyController.swift */,
 				AA0000000000000000000104 /* NowPlayingService.swift */,
-				AA0000000000000000000105 /* WidgetDataStore.swift */,
 				AA000000000000000000010A /* YMTrackReader.swift */,
 				AA000000000000000000010B /* YMActionController.swift */,
-				AA000000000000000000010C /* ArtworkFetcher.swift */,
 				AA000000000000000000010D /* YMAccessibilityObserver.swift */,
 				AA000000000000000000020D /* YandexMusicAPI.swift */,
 				AA000000000000000000060D /* NowPlayingStreamer.swift */,
-				AA000000000000000000080D /* LicenseManager.swift */,
 				AA0000000000000000000A0D /* MainWindowView.swift */,
 				AA0000000000000000000106 /* Info.plist */,
 				AA0000000000000000000107 /* YandexMusicDesktopWidget.entitlements */,
@@ -277,14 +268,11 @@
 				AA0000000000000000000302 /* ContentView.swift in Sources */,
 				AA0000000000000000000303 /* MediaKeyController.swift in Sources */,
 				AA0000000000000000000304 /* NowPlayingService.swift in Sources */,
-				AA0000000000000000000305 /* WidgetDataStore.swift in Sources */,
 				AA000000000000000000030A /* YMTrackReader.swift in Sources */,
 				AA000000000000000000030B /* YMActionController.swift in Sources */,
-				AA000000000000000000030C /* ArtworkFetcher.swift in Sources */,
 				AA000000000000000000030D /* YMAccessibilityObserver.swift in Sources */,
 				AA000000000000000000040D /* YandexMusicAPI.swift in Sources */,
 				AA000000000000000000050D /* NowPlayingStreamer.swift in Sources */,
-				AA000000000000000000070D /* LicenseManager.swift in Sources */,
 				AA000000000000000000090D /* MainWindowView.swift in Sources */,
 				AA0000000000000000000306 /* Constants.swift in Sources */,
 				AA0000000000000000000307 /* SharedModels.swift in Sources */,

@@ -82,6 +82,7 @@ struct NowPlayingPane: View {
 
     var body: some View {
         VStack(spacing: 18) {
+            Spacer(minLength: 0)
             ZStack {
                 artworkContent
                     .id(artKey)
@@ -136,8 +137,10 @@ struct NowPlayingPane: View {
                 }
             }
             .padding(.top, 4)
+            Spacer(minLength: 0)
         }
         .padding(40)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
         .onReceive(ticker) { _ in
             guard track.isPlaying, let last = lastTick else { return }
             let cap = track.duration > 0 ? track.duration : .infinity
@@ -248,9 +251,11 @@ struct PlayersPane: View {
 // MARK: - Настройки
 
 struct SettingsPane: View {
+    @ObservedObject private var service = NowPlayingService.shared
     @State private var ymAuthorized = YandexMusicAPI.shared.isAuthorized
     @State private var axGranted = YMTrackReader.isAccessibilityGranted
     @State private var launchAtLogin = (SMAppService.mainApp.status == .enabled)
+    @AppStorage("popup_style") private var popupStyle = "compact"
     private let ticker = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
 
     var body: some View {
@@ -303,6 +308,16 @@ struct SettingsPane: View {
                     }
                 }
 
+                group("Стиль попапа в меню-баре") {
+                    HStack(spacing: 16) {
+                        styleOption(title: "Компактный", value: "compact") { CompactMock(art: service.currentTrack.artworkData) }
+                        styleOption(title: "Карточка", value: "card") { CardMock(art: service.currentTrack.artworkData) }
+                        Spacer()
+                    }
+                    Text("Применяется при следующем открытии попапа.")
+                        .font(.system(size: 11)).foregroundStyle(.secondary)
+                }
+
                 group("Оформление виджета") {
                     HStack(alignment: .top, spacing: 10) {
                         Image(systemName: "paintbrush").foregroundStyle(Color.ymYellow).font(.system(size: 14))
@@ -330,6 +345,34 @@ struct SettingsPane: View {
             Text(title).font(.system(size: 12, weight: .semibold)).foregroundStyle(.secondary)
             content()
         }
+    }
+
+    /// Кликабельная карточка-превью стиля попапа с подсветкой выбранного.
+    private func styleOption<P: View>(title: String, value: String,
+                                      @ViewBuilder preview: () -> P) -> some View {
+        let selected = popupStyle == value
+        return Button { popupStyle = value } label: {
+            VStack(spacing: 8) {
+                preview()
+                    .frame(width: 154, height: 100)
+                    .background(Color.black.opacity(0.22))
+                    .clipShape(RoundedRectangle(cornerRadius: 11, style: .continuous))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 11, style: .continuous)
+                            .stroke(selected ? Color.ymYellow : Color.secondary.opacity(0.25),
+                                    lineWidth: selected ? 2 : 1)
+                    )
+                HStack(spacing: 5) {
+                    Image(systemName: selected ? "checkmark.circle.fill" : "circle")
+                        .font(.system(size: 11))
+                        .foregroundStyle(selected ? Color.ymYellow : .secondary)
+                    Text(title)
+                        .font(.system(size: 12, weight: selected ? .semibold : .regular))
+                        .foregroundStyle(.primary)
+                }
+            }
+        }
+        .buttonStyle(.plain)
     }
 
 
@@ -429,5 +472,71 @@ struct OnboardingView: View {
         .padding(12)
         .background(Color.secondary.opacity(0.06))
         .clipShape(RoundedRectangle(cornerRadius: 10))
+    }
+}
+
+// MARK: - Схематичные превью стилей попапа
+
+private extension Color { static let ymYellowMock = Color(red: 1, green: 0.84, blue: 0) }
+
+/// Миниатюра обложки для превью (реальная, если есть; иначе серый плейсхолдер).
+@ViewBuilder
+private func mockCover(_ art: Data?, size: CGFloat, radius: CGFloat) -> some View {
+    if let art, let img = NSImage(data: art) {
+        Image(nsImage: img).resizable().aspectRatio(contentMode: .fill)
+            .frame(width: size, height: size)
+            .clipShape(RoundedRectangle(cornerRadius: radius, style: .continuous))
+    } else {
+        RoundedRectangle(cornerRadius: radius, style: .continuous)
+            .fill(Color.secondary.opacity(0.5)).frame(width: size, height: size)
+    }
+}
+
+/// Мини-макет «Компактный»: горизонтальная строка.
+struct CompactMock: View {
+    var art: Data? = nil
+    var body: some View {
+        VStack(spacing: 8) {
+            HStack(spacing: 7) {
+                mockCover(art, size: 24, radius: 4)
+                VStack(alignment: .leading, spacing: 4) {
+                    Capsule().fill(Color.primary.opacity(0.55)).frame(width: 54, height: 4)
+                    Capsule().fill(Color.secondary.opacity(0.45)).frame(width: 36, height: 3)
+                }
+                Spacer(minLength: 4)
+                Image(systemName: "heart.fill").font(.system(size: 9)).foregroundStyle(Color.ymYellowMock)
+            }
+            Capsule().fill(Color.secondary.opacity(0.25)).frame(height: 3)
+                .overlay(alignment: .leading) { Capsule().fill(Color.ymYellowMock).frame(width: 44, height: 3) }
+            HStack(spacing: 12) {
+                Circle().fill(Color.secondary.opacity(0.55)).frame(width: 5, height: 5)
+                Circle().fill(Color.ymYellowMock).frame(width: 9, height: 9)
+                Circle().fill(Color.secondary.opacity(0.55)).frame(width: 5, height: 5)
+            }
+        }
+        .padding(13)
+    }
+}
+
+/// Мини-макет «Карточка»: крупная обложка по центру.
+struct CardMock: View {
+    var art: Data? = nil
+    var body: some View {
+        VStack(spacing: 4) {
+            mockCover(art, size: 36, radius: 6)
+            Capsule().fill(Color.primary.opacity(0.55)).frame(width: 48, height: 4).padding(.top, 2)
+            Capsule().fill(Color.secondary.opacity(0.45)).frame(width: 32, height: 3)
+            Capsule().fill(Color.secondary.opacity(0.25)).frame(width: 96, height: 3)
+                .overlay(alignment: .leading) { Capsule().fill(Color.ymYellowMock).frame(width: 32, height: 3) }
+                .padding(.top, 1)
+            HStack(spacing: 9) {
+                Circle().fill(Color.secondary.opacity(0.55)).frame(width: 5, height: 5)
+                Circle().fill(Color.ymYellowMock).frame(width: 9, height: 9)
+                Circle().fill(Color.secondary.opacity(0.55)).frame(width: 5, height: 5)
+                Image(systemName: "heart.fill").font(.system(size: 7)).foregroundStyle(Color.ymYellowMock)
+            }
+            .padding(.top, 1)
+        }
+        .padding(9)
     }
 }

@@ -1,262 +1,122 @@
 # YandexMusicDesktopWidget
 
-macOS 14+ desktop widget for Yandex Music with full playback controls.
+Виджет рабочего стола и меню-бар-попап для macOS, показывающий текущий трек из
+**Яндекс Музыки** (а также Spotify / Apple Music). Обложка в HD, лайки, управление
+воспроизведением, настраиваемое оформление.
 
-## Requirements
+> macOS 14+ • SwiftUI • WidgetKit • без платной подписки (ad-hoc сборка)
 
-- macOS 14.0 (Sonoma) or later
-- Xcode 15.0 or later
-- Apple Developer account (for App Groups and signing)
-- Yandex Music for macOS installed (`ru.yandex.desktop.music`)
+<p align="center">
+  <img src="docs/screenshot.png" width="560" alt="Скриншот">
+</p>
 
 ---
 
-## Project Structure
+## Возможности
+
+- 🎵 **Виджеты 3 размеров** на рабочем столе (маленький / средний / большой)
+- 🖼 **Обложка в HD** (1000×1000) через API Яндекс Музыки
+- ❤️ **Лайк / дизлайк** из виджета и попапа (через API — реально проставляется в аккаунте)
+- ⏯ **Управление**: плей/пауза, вперёд/назад, перемотка
+- 🎨 **Оформление виджета**: акцентный цвет, фон, показ исполнителя и кнопок
+- 🪟 **Меню-бар попап** в двух стилях («Компактный» и «Карточка») + полноценное окно
+- 🚀 **Автозапуск** при входе в систему
+- ⚡️ **Надёжное чтение трека** через `mediaremote-adapter` — работает, даже когда плеер свёрнут,
+  и в обход блокировки MediaRemote начиная с macOS 15.4
+
+---
+
+## Установка (готовый DMG)
+
+1. Скачайте `YandexMusicDesktopWidget-x.y.z.dmg` из [Releases](../../releases) и перетащите
+   приложение в «Программы».
+2. При первом запуске снимите «карантин» (приложение подписано ad-hoc, без платного Apple ID):
+   ```bash
+   xattr -dr com.apple.quarantine /Applications/YandexMusicDesktopWidget.app
+   ```
+   Затем откройте двойным кликом.
+3. Выдайте разрешение **Универсальный доступ**: Системные настройки → Конфиденциальность
+   и безопасность → Универсальный доступ.
+4. Войдите в Яндекс (окно приложения → «Настройки») — для HD-обложек и лайков.
+5. Добавьте виджет: правый клик по рабочему столу → «Изменить виджеты».
+
+Подробнее — в [docs/INSTALL.txt](release_tools/INSTALL.txt).
+
+---
+
+## Структура проекта
 
 ```
 YandexMusicDesktopWidget/
-├── Shared/                                    ← Shared between app and extension
-│   ├── SharedModels.swift                     ← TrackInfo, PlaybackCommand, WidgetSyncStatus
-│   ├── Constants.swift                        ← All app constants
-│   └── AppGroupManager.swift                  ← App Group UserDefaults bridge
+├── Shared/                              ← общий код приложения и виджета
+│   ├── SharedModels.swift               ← TrackInfo, WidgetSettings, PendingAction
+│   ├── Constants.swift                  ← плееры, bundle id, интервалы
+│   └── AppGroupManager.swift            ← обмен данными через App Group (track.json и пр.)
 │
-├── YandexMusicDesktopWidget/                  ← Main application target
-│   ├── YandexMusicDesktopWidgetApp.swift      ← @main entry point + AppDelegate
-│   ├── ContentView.swift                      ← Diagnostics window UI
-│   ├── MediaKeyController.swift               ← CGEvent media key sender
-│   ├── NowPlayingService.swift                ← MPNowPlayingInfoCenter polling
-│   ├── WidgetDataStore.swift                  ← High-level storage API
-│   ├── Info.plist                             ← App Info.plist
-│   └── YandexMusicDesktopWidget.entitlements  ← App sandbox + App Groups
+├── YandexMusicDesktopWidget/            ← основное приложение
+│   ├── YandexMusicDesktopWidgetApp.swift← точка входа, меню-бар, окно, AppDelegate
+│   ├── ContentView.swift                ← попап меню-бара (стили «Компактный»/«Карточка»)
+│   ├── MainWindowView.swift             ← окно: Сейчас играет / Плееры / Настройки / О программе
+│   ├── NowPlayingService.swift          ← ядро: источник трека, виджет-перезагрузка, лайки
+│   ├── NowPlayingStreamer.swift         ← событийный стрим из mediaremote-adapter
+│   ├── MediaRemoteHelper.swift          ← разовое чтение Now Playing (фолбэк)
+│   ├── YandexMusicAPI.swift             ← OAuth, поиск, лайки, HD-обложки
+│   ├── YMTrackReader.swift              ← запасное чтение трека через Accessibility
+│   ├── YMAccessibilityObserver.swift    ← наблюдение за окном ЯМ через AX
+│   ├── YMActionController.swift         ← лайк/дизлайк/повтор через AX (фолбэк)
+│   ├── MediaKeyController.swift         ← медиаклавиши (плей/некст/прев)
+│   └── Assets / Info.plist / *.entitlements
 │
-└── YandexMusicDesktopWidgetExtension/         ← Widget extension target
-    ├── DesktopMusicWidgetBundle.swift         ← @main WidgetBundle
-    ├── DesktopMusicWidget.swift               ← Small/Medium/Large widget views
-    ├── WidgetProvider.swift                   ← AppIntentTimelineProvider
-    ├── PlaybackIntents.swift                  ← PlayPause/Next/Previous AppIntents
-    ├── Info.plist                             ← Extension Info.plist
-    └── YandexMusicDesktopWidgetExtension.entitlements
+├── YandexMusicDesktopWidgetExtension/   ← виджет рабочего стола (WidgetKit)
+│   ├── DesktopMusicWidgetBundle.swift   ← точка входа виджета
+│   ├── DesktopMusicWidget.swift         ← виды Small/Medium/Large
+│   ├── WidgetProvider.swift             ← таймлайн + настройки виджета (AppIntent)
+│   └── PlaybackIntents.swift            ← кнопки виджета (через App Group)
+│
+├── Vendor/MediaRemoteAdapter/           ← сторонний адаптер чтения Now Playing
+├── release_tools/                       ← сборка DMG (ad-hoc подпись + инструкция)
+└── docs/                                ← документация (архитектура, Info.plist)
 ```
 
----
-
-## Step 1 — Create the Xcode Project
-
-1. Open Xcode → **File → New → Project**
-2. Choose **macOS → App**
-3. Set:
-   - **Product Name**: `YandexMusicDesktopWidget`
-   - **Bundle Identifier**: `com.yandexmusic.widget`
-   - **Interface**: SwiftUI
-   - **Language**: Swift
-   - **Minimum Deployment**: macOS 14.0
-4. Click **Next**, choose save location, click **Create**
+Подробное описание каждого файла — в [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
 ---
 
-## Step 2 — Add Widget Extension Target
+## Как это работает (кратко)
 
-1. **File → New → Target**
-2. Choose **macOS → Widget Extension**
-3. Set:
-   - **Product Name**: `YandexMusicDesktopWidgetExtension`
-   - **Bundle Identifier**: `com.yandexmusic.widget.extension`
-   - **Include Configuration Intent**: ✓ (check this)
-4. Click **Finish**
-5. When asked "Activate scheme?", click **Activate**
-
----
-
-## Step 3 — Add Files to the Project
-
-### Delete auto-generated files
-
-Delete from main target:
-- `ContentView.swift` (replace with ours)
-
-Delete from extension target:
-- All auto-generated widget files
-
-### Add Shared group
-
-1. **File → New → Group without Folder** → name it `Shared`
-2. Add these files to the group, targeting **both** main app and extension:
-   - `Shared/Constants.swift`
-   - `Shared/SharedModels.swift`
-   - `Shared/AppGroupManager.swift`
-
-### Add main app files
-
-Add to **YandexMusicDesktopWidget** target only:
-- `YandexMusicDesktopWidgetApp.swift`
-- `ContentView.swift`
-- `MediaKeyController.swift`
-- `NowPlayingService.swift`
-- `WidgetDataStore.swift`
-
-### Add extension files
-
-Add to **YandexMusicDesktopWidgetExtension** target only:
-- `DesktopMusicWidgetBundle.swift`
-- `DesktopMusicWidget.swift`
-- `WidgetProvider.swift`
-- `PlaybackIntents.swift`
+1. **Чтение трека.** `NowPlayingStreamer` держит постоянный процесс `mediaremote-adapter`
+   (perl + Apple-подписанный хост) и получает события Now Playing (название, исполнитель,
+   обложка, позиция, играет/пауза). Это обходит блокировку MediaRemote с macOS 15.4 и не
+   требует, чтобы окно плеера было открыто.
+2. **Обмен с виджетом.** `NowPlayingService` пишет трек в App Group (`track.json`), виджет
+   только читает. Кнопки виджета кладут действие в App Group, приложение его исполняет.
+3. **Обложки и лайки.** При входе в Яндекс `YandexMusicAPI` подтягивает HD-обложку (1000×1000)
+   и проставляет лайк по `trackId` на сервере.
+4. **Перезагрузка виджета.** При смене трека — мгновенный пуш + бэкапы; плюс таймлайн-«пульс»
+   раз в 15с как страховка (см. [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)).
 
 ---
 
-## Step 4 — Configure Signing & Capabilities
+## Сборка из исходников
 
-### For the main app target:
+Требуется **Xcode 16+** и macOS 14+.
 
-1. Select **YandexMusicDesktopWidget** target → **Signing & Capabilities**
-2. Set your **Team**
-3. Confirm Bundle ID: `com.yandexmusic.widget`
-4. Click **+ Capability** → add **App Groups**
-5. Click **+** under App Groups → enter: `group.com.yandexmusic.widget`
-6. Click **+ Capability** → add **App Sandbox**
+```bash
+# Релизная сборка
+xcodebuild -scheme YandexMusicDesktopWidget -configuration Release \
+  -destination 'platform=macOS' -allowProvisioningUpdates \
+  DEVELOPMENT_TEAM=ВАШ_TEAM_ID -derivedDataPath build/Release build
 
-### For the widget extension target:
-
-1. Select **YandexMusicDesktopWidgetExtension** target → **Signing & Capabilities**
-2. Set the **same Team**
-3. Confirm Bundle ID: `com.yandexmusic.widget.extension`
-4. Click **+ Capability** → add **App Groups**
-5. Add the **same** App Group: `group.com.yandexmusic.widget`
-6. Click **+ Capability** → add **App Sandbox**
-
----
-
-## Step 5 — Configure Entitlements
-
-Replace auto-generated entitlement files with the provided ones:
-
-**YandexMusicDesktopWidget.entitlements**:
-```xml
-<key>com.apple.security.app-sandbox</key><true/>
-<key>com.apple.security.application-groups</key>
-<array><string>group.com.yandexmusic.widget</string></array>
+# Сборка распространяемого DMG (ad-hoc подпись + встроенный адаптер)
+bash release_tools/make_release.sh 1.0.0
 ```
 
-**YandexMusicDesktopWidgetExtension.entitlements**:
-```xml
-<key>com.apple.security.app-sandbox</key><true/>
-<key>com.apple.security.application-groups</key>
-<array><string>group.com.yandexmusic.widget</string></array>
-```
+> Адаптер `Vendor/MediaRemoteAdapter` должен лежать в `Contents/Resources/MediaRemoteAdapter`
+> внутри .app — `make_release.sh` копирует его автоматически.
 
 ---
 
-## Step 6 — Configure Build Settings
+## Лицензия
 
-For **both targets**, in **Build Settings**:
-
-| Setting | Value |
-|---------|-------|
-| `MACOSX_DEPLOYMENT_TARGET` | `14.0` |
-| `SWIFT_VERSION` | `5.0` |
-| `ENABLE_HARDENED_RUNTIME` | `YES` |
-| `CODE_SIGN_STYLE` | `Automatic` |
-
-For the **main app target** additionally:
-| Setting | Value |
-|---------|-------|
-| `ENABLE_APP_SANDBOX` | `YES` |
-
----
-
-## Step 7 — Add Frameworks
-
-### Main app target → Build Phases → Link Binary With Libraries:
-
-- `MediaPlayer.framework`
-- `CoreGraphics.framework` (usually auto-linked)
-- `WidgetKit.framework`
-- `AppIntents.framework`
-
-### Widget extension target → Link Binary With Libraries:
-
-- `WidgetKit.framework`
-- `AppIntents.framework`
-- `CoreGraphics.framework`
-
----
-
-## Step 8 — Build and Run
-
-1. Select scheme **YandexMusicDesktopWidget**
-2. Press **⌘R** to build and run
-3. The diagnostics window will open
-
----
-
-## Step 9 — Add Widget to Desktop
-
-1. Open Yandex Music and play any track
-2. Run the main app at least once (this registers the widget extension)
-3. Right-click the macOS desktop → **Edit Widgets**
-4. Search for "Yandex Music"
-5. Drag **Small**, **Medium**, or **Large** widget to the desktop
-6. Click **Done**
-
----
-
-## How it Works
-
-### Track Polling
-
-`NowPlayingService` polls `MPNowPlayingInfoCenter.default().nowPlayingInfo` every 2 seconds. This system API returns metadata for whatever application currently holds the Now Playing session — Yandex Music populates this when it plays audio.
-
-### Media Keys
-
-`MediaKeyController` posts `CGEvent` system-defined events with NX key types:
-- `NX_KEYTYPE_PLAY` (16) → Play/Pause
-- `NX_KEYTYPE_NEXT` (17) → Next Track
-- `NX_KEYTYPE_PREVIOUS` (18) → Previous Track
-
-These are global media key events processed by the frontmost media application.
-
-### Data Bridge
-
-`AppGroupManager` uses `UserDefaults(suiteName:)` with the shared App Group container. Both the main app (writer) and the widget extension (reader) access the same key-value store.
-
-### Widget Refresh
-
-- `WidgetProvider` returns a `Timeline` with 30-second refresh policy
-- After each playback command, `WidgetCenter.shared.reloadAllTimelines()` forces immediate refresh
-- The main app also exposes a "Refresh Widget" button
-
----
-
-## Troubleshooting
-
-### Widget not appearing
-
-- Make sure the main app has been run at least once
-- Check that the App Group identifier matches exactly in both entitlements
-- Check Console.app for errors from `com.yandexmusic.widget`
-
-### No track info showing
-
-- Yandex Music must be running and playing audio
-- The app requires macOS media permissions — check System Settings → Privacy
-
-### Media key commands not working
-
-- The app must be authorized to post HID events
-- Run the app first, play Yandex Music, then use widget buttons
-- Check that `ENABLE_HARDENED_RUNTIME = YES` and no entitlement conflicts
-
-### App Group "Unavailable"
-
-- Verify your Apple Developer account has the App Group registered at developer.apple.com
-- Re-generate provisioning profiles after adding App Group capability
-- Try cleaning build folder: **Product → Clean Build Folder** (⇧⌘K)
-
----
-
-## Architecture Notes
-
-- `SharedModels.swift`, `Constants.swift`, `AppGroupManager.swift` are compiled into **both** targets
-- The widget extension has **no access** to `NowPlayingService` or `MediaKeyController` — it only reads from App Group storage and fires `AppIntent` actions
-- `PlaybackIntents.swift` in the extension duplicates the `sendMediaKey` function because the extension cannot import the main app module
-- All logging uses `OSLog` with structured categories for easy Console.app filtering
+Код приложения — [MIT](LICENSE). Компонент `Vendor/MediaRemoteAdapter` распространяется
+по своей лицензии — см. [ungive/mediaremote-adapter](https://github.com/ungive/mediaremote-adapter).

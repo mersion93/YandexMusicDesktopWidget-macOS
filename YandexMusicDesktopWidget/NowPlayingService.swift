@@ -42,6 +42,22 @@ final class NowPlayingService: ObservableObject {
         }
     }
 
+    /// Надёжная перезагрузка для СМЕНЫ ТРЕКА: мгновенный пуш + два бэкапа.
+    /// Система иногда отбрасывает одиночный reload под нагрузкой, и виджет
+    /// «застывал» до следующего пульса (60с). Повторы через 1.5с и 4с ловят
+    /// отброшенный пуш. Срабатывает только при реальной смене трека/паузы,
+    /// не постоянно — поэтому бюджет WidgetKit не страдает.
+    private func reloadWidgetForcefully() {
+        lastWidgetReload = Date()
+        widgetReloadWork?.cancel(); widgetReloadWork = nil
+        WidgetCenter.shared.reloadAllTimelines()
+        for delay in [1.5, 4.0] {
+            DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
+                WidgetCenter.shared.reloadAllTimelines()
+            }
+        }
+    }
+
     // Дедуп активных запросов статуса лайка (по ключу «title|artist»).
     private var fetchingArtwork: Set<String> = []
 
@@ -408,9 +424,9 @@ final class NowPlayingService: ObservableObject {
             lastSignificantArtist  = track.artist
             lastSignificantPlaying = track.isPlaying
             lastArtworkPresent     = (track.artworkData != nil)
-            // Принудительно просим систему перезагрузить таймлайны виджета.
-            // Работает из основного (containing) приложения, даже без sandbox.
-            reloadWidgetDebounced()
+            // Смена трека/паузы — НАДЁЖНАЯ перезагрузка с бэкапами (иногда система
+            // отбрасывает одиночный пуш под нагрузкой → виджет «застывал» до пульса).
+            reloadWidgetForcefully()
             logger.debug("Трек изменился: «\(track.title)» / \(source.rawValue) / играет=\(track.isPlaying)")
         }
 
@@ -539,33 +555,14 @@ final class NowPlayingService: ObservableObject {
             MediaKeyController.shared.previousTrack()
             rapidRefreshBurst()
         case .like:
-            guard isYandexActive, let pid else { break }
-            DispatchQueue.main.async { [weak self] in
-                guard let self else { return }
-                let ns: LikeState = self.currentTrack.likeState == .liked ? .none : .liked
-                self.likeOverrides[self.currentTrack.id] = ns
-                self.currentTrack.likeState = ns
-                AppGroupManager.shared.saveTrack(self.currentTrack)
-                reloadWidgetDebounced()
-            }
-            DispatchQueue.global(qos: .userInitiated).async {
-                _ = YMActionController.shared.performLike(pid: pid)
-                AppGroupManager.shared.saveLastCommand(.like)
-            }
+            // Тот же надёжный путь, что и из окна: API Яндекса (setLike по trackId),
+            // с AX-фолбэком внутри likeCurrentTrack. Раньше виджет шёл только через
+            // AX-клик по кнопке в окне ЯМ — и лайк часто не доходил до сервера.
+            guard isYandexActive else { break }
+            DispatchQueue.main.async { [weak self] in self?.likeCurrentTrack() }
         case .dislike:
-            guard isYandexActive, let pid else { break }
-            DispatchQueue.main.async { [weak self] in
-                guard let self else { return }
-                let ns: LikeState = self.currentTrack.likeState == .disliked ? .none : .disliked
-                self.likeOverrides[self.currentTrack.id] = ns
-                self.currentTrack.likeState = ns
-                AppGroupManager.shared.saveTrack(self.currentTrack)
-                reloadWidgetDebounced()
-            }
-            DispatchQueue.global(qos: .userInitiated).async {
-                _ = YMActionController.shared.performDislike(pid: pid)
-                AppGroupManager.shared.saveLastCommand(.dislike)
-            }
+            guard isYandexActive else { break }
+            DispatchQueue.main.async { [weak self] in self?.dislikeCurrentTrack() }
         case .openApp:
             openActivePlayer()
         case .repeatMode:

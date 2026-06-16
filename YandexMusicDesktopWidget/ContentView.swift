@@ -30,10 +30,32 @@ struct EqualizerBars: View {
     }
 }
 
+/// Горизонтальный эквалайзер-«волна» — линии разной длины, поверх крупной обложки.
+struct HorizontalEqualizer: View {
+    var color: Color = .ymYellow
+    @State private var animate = false
+    private let factors: [CGFloat] = [0.7, 1.0, 0.55, 0.9, 0.65]
+
+    var body: some View {
+        VStack(spacing: 5) {
+            ForEach(factors.indices, id: \.self) { i in
+                Capsule()
+                    .fill(color)
+                    .frame(width: animate ? 150 * factors[i] : 40, height: 4)
+                    .animation(
+                        .easeInOut(duration: 0.5 + Double(i) * 0.09)
+                            .repeatForever(autoreverses: true),
+                        value: animate
+                    )
+            }
+        }
+        .onAppear { animate = true }
+    }
+}
+
 struct ContentView: View {
     @StateObject private var service = NowPlayingService.shared
     @State private var axGranted     = false
-    @State private var showSettings  = false
     @State private var ymAuthorized  = YandexMusicAPI.shared.isAuthorized
     @State private var launchAtLogin = (SMAppService.mainApp.status == .enabled)
     @Environment(\.openWindow) private var openWindow
@@ -50,24 +72,15 @@ struct ContentView: View {
     // Пульсация статус-точки
     @State private var dotPulse     = false
 
+    /// Стиль попапа: "compact" (горизонтальный) или "card" (крупная карточка).
+    @AppStorage("popup_style") private var popupStyle = "compact"
+
     private let ticker = Timer.publish(every: 0.5, on: .main, in: .common).autoconnect()
 
     var body: some View {
-        VStack(spacing: 0) {
-            header
-            Divider()
-            playerSection
-            progressSection
-            if !axGranted && !ymAuthorized {
-                Divider()
-                permissionsAlert
-            }
-            Divider()
-            openYMButton
-            Divider()
-            compactFooter
+        Group {
+            if popupStyle == "card" { cardLayout } else { compactLayout }
         }
-        .frame(width: 320)
         .background(Color(NSColor.windowBackgroundColor))
         // Плавное изменение высоты попапа при появлении/скрытии полоски прогресса
         .animation(.easeInOut(duration: 0.3), value: service.currentTrack.duration > 0)
@@ -90,6 +103,181 @@ struct ContentView: View {
         .onChange(of: service.currentTrack.isPlaying) { playing in
             dotPulse = playing
             if playing { lastTickDate = Date() } else { lastTickDate = nil }
+        }
+    }
+
+    // MARK: - Стиль «Компактный» (горизонтальный)
+
+    private var compactLayout: some View {
+        VStack(spacing: 0) {
+            header
+            Divider()
+            playerSection
+            progressSection
+            if !axGranted && !ymAuthorized {
+                Divider()
+                permissionsAlert
+            }
+            Divider()
+            openYMButton
+            Divider()
+            compactFooter
+        }
+        .frame(width: 320)
+    }
+
+    // MARK: - Стиль «Карточка» (крупная обложка по центру)
+
+    private var cardLayout: some View {
+        VStack(spacing: 0) {
+            // Крупная обложка с эквалайзером поверх при воспроизведении
+            ZStack {
+                cardArtwork
+                    .id(artworkIdentifier)
+                    .transition(.opacity)
+                    .animation(.easeInOut(duration: 0.35), value: artworkIdentifier)
+                if service.currentTrack.isPlaying {
+                    HorizontalEqualizer(color: Color.ymYellow)
+                        .frame(width: 150)
+                        .shadow(color: .black.opacity(0.35), radius: 6)
+                        .transition(.opacity)
+                }
+            }
+            .onTapGesture { openYandexMusic() }
+            .help("Открыть Яндекс Музыку")
+            .padding(.top, 22)
+            .padding(.horizontal, 24)
+
+            // Название / исполнитель / источник — по центру
+            VStack(spacing: 5) {
+                Text(service.currentTrack.title)
+                    .font(.system(size: 21, weight: .bold, design: .rounded))
+                    .foregroundStyle(.primary)
+                    .lineLimit(1)
+                    .contentTransition(.opacity)
+                Text(service.currentTrack.artist)
+                    .font(.system(size: 14, design: .rounded))
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                    .multilineTextAlignment(.center)
+                    .contentTransition(.opacity)
+                Text(playerName)
+                    .font(.system(size: 12, weight: .semibold, design: .rounded))
+                    .foregroundStyle(Color.ymYellow)
+                    .padding(.top, 2)
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.horizontal, 24)
+            .padding(.top, 16)
+            .animation(.spring(response: 0.35, dampingFraction: 0.85),
+                       value: service.currentTrack.id)
+
+            // Прогресс (крупный)
+            cardProgress
+                .padding(.horizontal, 24)
+                .padding(.top, 16)
+
+            // Управление
+            HStack(spacing: 22) {
+                mediaButton(icon: "backward.fill", pressing: $pressingPrev, size: 18) {
+                    MediaKeyController.shared.previousTrack()
+                    service.scheduleRefreshAfterTrackChange()
+                }
+                playPauseButton
+                mediaButton(icon: "forward.fill", pressing: $pressingNext, size: 18) {
+                    MediaKeyController.shared.nextTrack()
+                    service.scheduleRefreshAfterTrackChange()
+                }
+                if service.currentTrack.isYandex {
+                    Rectangle()
+                        .fill(Color.secondary.opacity(0.25))
+                        .frame(width: 1, height: 26)
+                        .padding(.horizontal, 2)
+                    likeButton
+                }
+            }
+            .padding(.top, 18)
+            .padding(.bottom, 6)
+
+            if !axGranted && !ymAuthorized {
+                permissionsAlert
+            }
+
+            Divider().padding(.top, 10)
+            compactFooter
+        }
+        .frame(width: 360)
+    }
+
+    /// Крупная квадратная обложка для стиля «Карточка».
+    private var cardArtwork: some View {
+        Group {
+            if let data = service.currentTrack.artworkData,
+               let img  = NSImage(data: data) {
+                Image(nsImage: img)
+                    .resizable()
+                    .aspectRatio(contentMode: .fill)
+            } else {
+                ZStack {
+                    LinearGradient(
+                        colors: [
+                            Color(red: 0.22, green: 0.08, blue: 0.02),
+                            Color(red: 0.09, green: 0.09, blue: 0.09)
+                        ],
+                        startPoint: .topLeading, endPoint: .bottomTrailing
+                    )
+                    Text("Я")
+                        .font(.system(size: 60, weight: .black))
+                        .foregroundStyle(Color.ymYellow)
+                }
+            }
+        }
+        .frame(width: 240, height: 240)
+        .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
+        .shadow(color: .black.opacity(0.3), radius: 12, y: 5)
+    }
+
+    /// Полоса прогресса для стиля «Карточка».
+    @ViewBuilder
+    private var cardProgress: some View {
+        let dur = service.currentTrack.duration
+        if dur > 0 {
+            VStack(spacing: 6) {
+                GeometryReader { geo in
+                    ZStack(alignment: .leading) {
+                        Capsule().fill(Color.secondary.opacity(0.18)).frame(height: 5)
+                        Capsule().fill(Color.ymYellow)
+                            .frame(width: max(0, geo.size.width * CGFloat(min(elapsedSeconds / dur, 1.0))), height: 5)
+                            .animation(isSeeking ? nil : .linear(duration: 0.5), value: elapsedSeconds)
+                    }
+                    .frame(maxHeight: .infinity, alignment: .center)
+                    .contentShape(Rectangle())
+                    .gesture(
+                        DragGesture(minimumDistance: 0)
+                            .onChanged { v in
+                                isSeeking = true
+                                elapsedSeconds = max(0, min(1, v.location.x / geo.size.width)) * dur
+                                lastTickDate = nil
+                            }
+                            .onEnded { v in
+                                let target = max(0, min(1, v.location.x / geo.size.width)) * dur
+                                elapsedSeconds = target
+                                lastTickDate = service.currentTrack.isPlaying ? Date() : nil
+                                NowPlayingStreamer.shared.seek(toSeconds: target)
+                                DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) { isSeeking = false }
+                            }
+                    )
+                }
+                .frame(height: 14)
+                HStack {
+                    Text(formatDuration(elapsedSeconds))
+                        .font(.system(size: 11, design: .monospaced)).foregroundStyle(.secondary)
+                    Spacer()
+                    Text(formatDuration(dur))
+                        .font(.system(size: 11, design: .monospaced)).foregroundStyle(.secondary)
+                }
+            }
+            .transition(.opacity)
         }
     }
 
@@ -464,120 +652,6 @@ struct ContentView: View {
         .padding(.vertical, 9)
     }
 
-    // MARK: - Настройки
-
-    private var settingsPopover: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            Text("Аккаунт Яндекс Музыки")
-                .font(.system(size: 12, weight: .semibold))
-                .foregroundStyle(.secondary)
-                .padding(.horizontal, 16)
-                .padding(.top, 14)
-                .padding(.bottom, 8)
-
-            HStack(spacing: 10) {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(ymAuthorized ? "Вход выполнен" : "Вход не выполнен")
-                        .font(.system(size: 12))
-                    Text("Настоящие обложки и избранное")
-                        .font(.system(size: 10)).foregroundStyle(.secondary)
-                }
-                Spacer()
-                if ymAuthorized {
-                    Button("Выйти") {
-                        YandexMusicAPI.shared.logout()
-                        ymAuthorized = false
-                    }
-                    .buttonStyle(.bordered).controlSize(.small)
-                } else {
-                    Button("Войти") { loginYandex() }
-                        .buttonStyle(.borderedProminent).controlSize(.small)
-                        .tint(Color.ymYellow)
-                }
-            }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 8)
-
-            Divider()
-
-            Text("Разрешения")
-                .font(.system(size: 12, weight: .semibold))
-                .foregroundStyle(.secondary)
-                .padding(.horizontal, 16)
-                .padding(.top, 14)
-                .padding(.bottom, 8)
-
-            permRow(title: "Accessibility", subtitle: "Лайк/дизлайк и запасное чтение трека",
-                    granted: axGranted) { YMTrackReader.requestAccessibilityPermission() }
-
-            Divider()
-
-            Text("Общее")
-                .font(.system(size: 12, weight: .semibold))
-                .foregroundStyle(.secondary)
-                .padding(.horizontal, 16)
-                .padding(.top, 14)
-                .padding(.bottom, 8)
-
-            Toggle(isOn: $launchAtLogin) {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("Запускать при входе").font(.system(size: 12))
-                    Text("Открывать приложение при включении Mac")
-                        .font(.system(size: 10)).foregroundStyle(.secondary)
-                }
-            }
-            .toggleStyle(.switch)
-            .tint(Color.ymYellow)
-            .padding(.horizontal, 16)
-            .padding(.vertical, 4)
-            .onChange(of: launchAtLogin) { enabled in
-                do {
-                    if enabled { try SMAppService.mainApp.register() }
-                    else { try SMAppService.mainApp.unregister() }
-                } catch {
-                    // Откатываем переключатель, если система отказала
-                    launchAtLogin = (SMAppService.mainApp.status == .enabled)
-                }
-            }
-
-            Spacer(minLength: 14)
-        }
-        .frame(width: 280)
-    }
-
-    private func permRow(title: String, subtitle: String,
-                         granted: Bool, action: @escaping () -> Void) -> some View {
-        HStack(spacing: 10) {
-            VStack(alignment: .leading, spacing: 2) {
-                Text(title).font(.system(size: 12))
-                Text(subtitle).font(.system(size: 10)).foregroundStyle(.secondary)
-            }
-            Spacer()
-            if granted {
-                Image(systemName: "checkmark.circle.fill")
-                    .foregroundStyle(.green)
-                    .font(.system(size: 14))
-            } else {
-                Button("Разрешить", action: action)
-                    .buttonStyle(.bordered)
-                    .controlSize(.small)
-                    .tint(Color.ymYellow)
-            }
-        }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 8)
-    }
-
-    private func diagRow(_ label: String, _ value: String) -> some View {
-        HStack {
-            Text(label).font(.system(size: 11)).foregroundStyle(.secondary)
-            Spacer()
-            Text(value).font(.system(size: 11, weight: .medium)).foregroundStyle(.primary)
-        }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 4)
-    }
-
     // MARK: - Helpers
 
     private func loginYandex() {
@@ -604,9 +678,5 @@ struct ContentView: View {
 
     private func formatDuration(_ s: TimeInterval) -> String {
         let t = Int(s); return String(format: "%d:%02d", t / 60, t % 60)
-    }
-
-    private func formatTime(_ date: Date) -> String {
-        let f = DateFormatter(); f.dateFormat = "HH:mm:ss"; return f.string(from: date)
     }
 }
