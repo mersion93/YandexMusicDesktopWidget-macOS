@@ -435,7 +435,7 @@ final class NowPlayingService: ObservableObject {
             self.enrichTrack(t)   // теперь artist есть — можно искать HD/лайк
         }
         artistRevealWork = work
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.8, execute: work)
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.6, execute: work)
     }
 
     private func applyNativeTrack(_ track: TrackInfo) {
@@ -548,15 +548,11 @@ final class NowPlayingService: ObservableObject {
             lastSignificantLike    = track.likeState
             AppGroupManager.shared.saveTrack(track)
             AppGroupManager.shared.saveSyncStatus(.synced)
-            if idChanged && pendingArtist == nil {
-                // СМЕНА трека с полными данными: ждём HD-обложку и перезагружаем ОДИН
-                // раз уже с ней (или родной по таймауту). HD из кэша применится сразу.
-                scheduleNewTrackWidgetReload()
-            } else {
-                // Исполнитель ещё скрыт (показываем название+родную обложку СРАЗУ),
-                // либо пауза/лайк/раскрытие исполнителя — мгновенная перезагрузка.
-                reloadWidgetForcefully()
-            }
+            // Перезагружаем СРАЗУ (название+родная обложка без задержки). HD-обложка
+            // подменится отдельно через cacheAndApplyHD и плавно «дорисуется» (ключ
+            // обложки в виджете завязан на содержимое → мягкий кросс-фейд). Так мы НЕ
+            // копим задержки (раньше маска исполнителя + ожидание HD складывались в ~1с).
+            reloadWidgetForcefully()
             logger.debug("Трек изменился: «\(track.title)» / \(source.rawValue) / играет=\(track.isPlaying)")
         }
 

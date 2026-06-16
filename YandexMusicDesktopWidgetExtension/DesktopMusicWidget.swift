@@ -81,7 +81,7 @@ struct SmallWidgetView: View {
                 Button(intent: OpenYandexMusicIntent()) {
                     ArtworkThumb(data: track.artworkData, size: 52)
                         .contentTransition(.opacity)
-                        .id("small-art-\(track.id)")
+                        .id("small-art-\(track.title)-\(track.artworkData?.count ?? 0)")
                 }
                 .buttonStyle(.plain)
                 Spacer()
@@ -149,7 +149,7 @@ struct MediumWidgetView: View {
                 Button(intent: OpenYandexMusicIntent()) {
                     ArtworkThumb(data: track.artworkData, size: art)
                         .contentTransition(.opacity)
-                        .id("med-art-\(track.id)")
+                        .id("med-art-\(track.title)-\(track.artworkData?.count ?? 0)")
                 }
                 .buttonStyle(.plain)
                 .layoutPriority(1)
@@ -221,7 +221,7 @@ struct LargeWidgetView: View {
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .clipped()
                     .contentTransition(.opacity)
-                    .id("lg-art-\(track.id)")
+                    .id("lg-art-\(track.title)-\(track.artworkData?.count ?? 0)")
             }
             .buttonStyle(.plain)
 

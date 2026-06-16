@@ -81,7 +81,7 @@ struct NowPlayingPane: View {
     // низкого→HD того же трека происходит на месте (без повторного мелькания).
     // Ключ включает содержимое обложки — кросс-фейд срабатывает при реальной смене
     // картинки (включая догрузку HD), без «прыжка».
-    private var artKey: String { "\(track.id)#\(displayArt?.count ?? 0)" }
+    private var artKey: String { "\(track.title)#\(displayArt?.count ?? 0)" }
 
     var body: some View {
         VStack(spacing: 18) {

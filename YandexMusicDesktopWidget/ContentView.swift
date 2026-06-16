@@ -307,7 +307,7 @@ struct ContentView: View {
     // Ключ включает и трек, и СОДЕРЖИМОЕ обложки: кросс-фейд срабатывает ровно когда
     // приходит реальная новая картинка (а не на миг раньше с предыдущей) — без «прыжка».
     private var artworkIdentifier: String {
-        "\(service.currentTrack.id)#\(service.currentTrack.artworkData?.count ?? 0)"
+        "\(service.currentTrack.title)#\(service.currentTrack.artworkData?.count ?? 0)"
     }
 
     private var playerName: String {
