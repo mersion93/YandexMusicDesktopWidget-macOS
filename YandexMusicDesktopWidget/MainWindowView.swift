@@ -335,8 +335,12 @@ struct SettingsPane: View {
         }
         .navigationTitle("Настройки")
         .onReceive(ticker) { _ in
-            ymAuthorized = YandexMusicAPI.shared.isAuthorized
-            axGranted = YMTrackReader.isAccessibilityGranted
+            // Пишем в @State только при РЕАЛЬНОМ изменении — иначе каждую секунду
+            // перерисовывается вся панель и заново декодируются превью-обложки.
+            let auth = YandexMusicAPI.shared.isAuthorized
+            let ax = YMTrackReader.isAccessibilityGranted
+            if auth != ymAuthorized { ymAuthorized = auth }
+            if ax != axGranted { axGranted = ax }
         }
     }
 

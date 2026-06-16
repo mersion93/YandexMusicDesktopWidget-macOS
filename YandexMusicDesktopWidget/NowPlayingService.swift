@@ -65,6 +65,7 @@ final class NowPlayingService: ObservableObject {
     private var lastSignificantArtist  = ""
     private var lastSignificantPlaying = false
     private var lastArtworkPresent     = false
+    private var lastSignificantLike: LikeState = .none
 
     // Пока стрим хоть раз отдал данные и не был очищен — он основной источник,
     // и чтение через Accessibility НЕ вмешивается (иначе перебивает неверными данными).
@@ -232,35 +233,42 @@ final class NowPlayingService: ObservableObject {
         }
     }
 
+    /// Выставляет статус лайка ТОЛЬКО если этот трек всё ещё текущий (защита от
+    /// гонки, когда трек переключился за время сетевого запроса).
+    private func applyLikeIfCurrent(_ trackId: String, state: LikeState) {
+        guard currentTrack.id == trackId, currentTrack.likeState != state else { return }
+        currentTrack.likeState = state
+        AppGroupManager.shared.saveTrack(currentTrack)
+        reloadWidgetDebounced()
+    }
+
     /// Лайк текущего трека (вызывается из основного окна). Только для Яндекс Музыки.
     func likeCurrentTrack() {
         guard isYandexActive else { return }
         // Путь через API Яндекса — надёжно ставит/снимает лайк по id трека.
         if YandexMusicAPI.shared.isAuthorized {
-            let key = apiKey(currentTrack)
+            // Фиксируем трек, по которому нажали лайк — за время сетевого ответа трек
+            // может переключиться, и без этого мы лайкнули/пометили бы уже ДРУГОЙ трек.
+            let target = currentTrack
+            let key = apiKey(target)
+            let prevState = target.likeState
             if let apiId = apiTrackIdMap[key] {
-                let newLiked = currentTrack.likeState != .liked
-                currentTrack.likeState = newLiked ? .liked : .none   // оптимистично
-                AppGroupManager.shared.saveTrack(currentTrack)
-                reloadWidgetDebounced()
+                let newLiked = prevState != .liked
+                applyLikeIfCurrent(target.id, state: newLiked ? .liked : .none)   // оптимистично
                 YandexMusicAPI.shared.setLike(trackId: apiId, liked: newLiked) { [weak self] ok in
-                    guard let self, ok else { return }
-                    self.currentTrack.likeState = newLiked ? .liked : .none
-                    AppGroupManager.shared.saveTrack(self.currentTrack)
-                    reloadWidgetDebounced()
+                    guard let self else { return }
+                    // На ошибке откатываем оптимистичный статус, чтобы не врать.
+                    if !ok { self.applyLikeIfCurrent(target.id, state: prevState) }
                 }
                 return
             }
             // id ещё не найден — ищем ПО ДЛИТЕЛЬНОСТИ (точная запись) и затем лайкаем
-            let dur = currentTrack.duration
-            YandexMusicAPI.shared.searchTrack(title: currentTrack.title, artist: currentTrack.artist, duration: dur) { [weak self] apiTrack in
-                guard let self, let apiTrack else { return }
-                self.apiTrackIdMap[self.apiKey(self.currentTrack)] = apiTrack.id
+            applyLikeIfCurrent(target.id, state: .liked)   // оптимистично
+            YandexMusicAPI.shared.searchTrack(title: target.title, artist: target.artist, duration: target.duration) { [weak self] apiTrack in
+                guard let self, let apiTrack else { self?.applyLikeIfCurrent(target.id, state: prevState); return }
+                self.apiTrackIdMap[key] = apiTrack.id
                 YandexMusicAPI.shared.setLike(trackId: apiTrack.id, liked: true) { ok in
-                    guard ok else { return }
-                    self.currentTrack.likeState = .liked
-                    AppGroupManager.shared.saveTrack(self.currentTrack)
-                    self.reloadWidgetDebounced()
+                    if !ok { self.applyLikeIfCurrent(target.id, state: prevState) }
                 }
             }
             return
@@ -412,6 +420,12 @@ final class NowPlayingService: ObservableObject {
         // Обложку/артиста НЕ подставляем из внешних кэшей — только родные из системного стрима.
 
         let idChanged = track.id != currentTrack.id
+        // Сохраняем статус лайка из API между событиями одного трека: makeTrack про
+        // лайк не знает (.none), и перезапись стёрла бы реальный статус — это давало
+        // мелькание сердечка и лишние записи track.json на каждое событие позиции.
+        if !idChanged, likeOverrides[track.id] == nil {
+            track.likeState = currentTrack.likeState
+        }
         if idChanged {
             // Анимируем переход между треками через SwiftUI transaction
             withAnimation(.spring(response: 0.38, dampingFraction: 0.82)) {
@@ -423,19 +437,24 @@ final class NowPlayingService: ObservableObject {
             dataSource   = source
         }
 
-        AppGroupManager.shared.saveTrack(track)
-        AppGroupManager.shared.saveSyncStatus(.synced)
-
         let titleChanged   = track.title    != lastSignificantTitle
         let artistChanged  = track.artist   != lastSignificantArtist
         let playingChanged = track.isPlaying != lastSignificantPlaying
         let artChanged     = (track.artworkData != nil) != lastArtworkPresent
 
-        if titleChanged || artistChanged || playingChanged || artChanged {
+        // track.json пишем ТОЛЬКО при изменении видимого виджету контента
+        // (название/исполнитель/обложка/пауза/лайк). Позицию (elapsed) виджет не
+        // показывает, поэтому на каждое событие стрима ~150 КБ обложки в файл не
+        // гоняем — попап/окно берут позицию из currentTrack в памяти.
+        let likeChanged = track.likeState != lastSignificantLike
+        if titleChanged || artistChanged || playingChanged || artChanged || likeChanged {
             lastSignificantTitle   = track.title
             lastSignificantArtist  = track.artist
             lastSignificantPlaying = track.isPlaying
             lastArtworkPresent     = (track.artworkData != nil)
+            lastSignificantLike    = track.likeState
+            AppGroupManager.shared.saveTrack(track)
+            AppGroupManager.shared.saveSyncStatus(.synced)
             // Смена трека/паузы — НАДЁЖНАЯ перезагрузка с бэкапами (иногда система
             // отбрасывает одиночный пуш под нагрузкой → виджет «застывал» до пульса).
             reloadWidgetForcefully()
@@ -470,12 +489,7 @@ final class NowPlayingService: ObservableObject {
         // Уже знаем id — сверяем лайк и применяем HD-обложку (из кэша или докачиваем).
         if let apiId = apiTrackIdMap[key] {
             let liked = YandexMusicAPI.shared.isLiked(trackId: apiId)
-            guard currentTrack.title == track.title else { return }
-            if currentTrack.likeState != (liked ? .liked : .none) {
-                currentTrack.likeState = liked ? .liked : .none
-                AppGroupManager.shared.saveTrack(currentTrack)
-                reloadWidgetDebounced()
-            }
+            applyLikeIfCurrent(track.id, state: liked ? .liked : .none)
             applyOrFetchHDCover(apiId: apiId, for: track)
             return
         }
@@ -490,12 +504,7 @@ final class NowPlayingService: ObservableObject {
                 guard let apiTrack else { return }
                 self.apiTrackIdMap[key] = apiTrack.id
                 let liked = YandexMusicAPI.shared.isLiked(trackId: apiTrack.id)
-                guard self.currentTrack.title == track.title else { return }
-                if self.currentTrack.likeState != (liked ? .liked : .none) {
-                    self.currentTrack.likeState = liked ? .liked : .none
-                    AppGroupManager.shared.saveTrack(self.currentTrack)
-                    self.reloadWidgetDebounced()
-                }
+                self.applyLikeIfCurrent(track.id, state: liked ? .liked : .none)
                 // HD-обложка: только при СТРОГОМ совпадении названия (чтобы не подставить чужую).
                 guard apiTrack.title.lowercased() == track.title.lowercased(),
                       let url0 = apiTrack.coverURL else { return }
