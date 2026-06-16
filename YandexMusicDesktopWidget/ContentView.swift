@@ -304,7 +304,11 @@ struct ContentView: View {
 
     // Ключ кросс-фейда — только id трека: смена обложки того же трека (низкое→HD)
     // происходит на месте, без повторного мелькания.
-    private var artworkIdentifier: String { service.currentTrack.id }
+    // Ключ включает и трек, и СОДЕРЖИМОЕ обложки: кросс-фейд срабатывает ровно когда
+    // приходит реальная новая картинка (а не на миг раньше с предыдущей) — без «прыжка».
+    private var artworkIdentifier: String {
+        "\(service.currentTrack.id)#\(service.currentTrack.artworkData?.count ?? 0)"
+    }
 
     private var playerName: String {
         let bid = service.currentTrack.playerBundleID

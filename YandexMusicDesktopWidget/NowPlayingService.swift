@@ -3,6 +3,8 @@ import Combine
 import AppKit
 import SwiftUI
 import WidgetKit
+import ImageIO
+import UniformTypeIdentifiers
 import OSLog
 
 final class NowPlayingService: ObservableObject {
@@ -581,27 +583,20 @@ final class NowPlayingService: ObservableObject {
     /// нужны (виджет рендерит <~700px), а меньший размер = меньше байт в App Group и
     /// быстрее декодирование при каждом рендере виджета. Возвращает nil при ошибке.
     static func downscaledArtwork(_ data: Data, maxDim: CGFloat = 700) -> Data? {
-        // По ПИКСЕЛЯМ (а не NSImage.size в точках — он зависит от DPI и может
-        // ошибочно посчитать обложку «маленькой»).
-        guard let src = NSBitmapImageRep(data: data) else { return nil }
-        let pw = src.pixelsWide, ph = src.pixelsHigh
-        guard pw > 0, ph > 0 else { return nil }
-        let maxSide = max(pw, ph)
-        if CGFloat(maxSide) <= maxDim { return data }   // уже мелкая
-        let scale = maxDim / CGFloat(maxSide)
-        let newW = max(1, Int((CGFloat(pw) * scale).rounded()))
-        let newH = max(1, Int((CGFloat(ph) * scale).rounded()))
-        guard let dst = NSBitmapImageRep(
-            bitmapDataPlanes: nil, pixelsWide: newW, pixelsHigh: newH,
-            bitsPerSample: 8, samplesPerPixel: 3, hasAlpha: false, isPlanar: false,
-            colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 0) else { return nil }
-        dst.size = NSSize(width: newW, height: newH)
-        NSGraphicsContext.saveGraphicsState()
-        NSGraphicsContext.current = NSGraphicsContext(bitmapImageRep: dst)
-        NSGraphicsContext.current?.imageInterpolation = .high
-        src.draw(in: NSRect(x: 0, y: 0, width: newW, height: newH))
-        NSGraphicsContext.restoreGraphicsState()
-        return dst.representation(using: .jpeg, properties: [.compressionFactor: 0.82])
+        // ImageIO (CGImageSource) — надёжный даунсэмплинг. Прежний путь через
+        // NSBitmapImageRep+NSGraphicsContext рисовал ЧЁРНЫЙ квадрат.
+        guard let src = CGImageSourceCreateWithData(data as CFData, nil) else { return nil }
+        let opts: [CFString: Any] = [
+            kCGImageSourceCreateThumbnailFromImageAlways: true,
+            kCGImageSourceThumbnailMaxPixelSize: Int(maxDim),   // не апскейлит мелкие
+            kCGImageSourceCreateThumbnailWithTransform: true
+        ]
+        guard let thumb = CGImageSourceCreateThumbnailAtIndex(src, 0, opts as CFDictionary) else { return nil }
+        let out = NSMutableData()
+        guard let dest = CGImageDestinationCreateWithData(out as CFMutableData, "public.jpeg" as CFString, 1, nil) else { return nil }
+        CGImageDestinationAddImage(dest, thumb, [kCGImageDestinationLossyCompressionQuality: 0.85] as CFDictionary)
+        guard CGImageDestinationFinalize(dest) else { return nil }
+        return out as Data
     }
 
     private func cacheAndApplyHD(_ data: Data, apiId: String, for track: TrackInfo) {
