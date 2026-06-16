@@ -68,14 +68,14 @@ final class NowPlayingService: ObservableObject {
     }
 
     private func reloadWidgetForcefully() {
+        // ОДНА перезагрузка, без бэкапов. Бэкапы (1.5с/4с) исчерпывали суточный
+        // бюджет WidgetKit, и система начинала ТРОТТЛИТЬ — задержка виджета скакала
+        // до 2-3с. Меньше перезагрузок → система honor'ит их быстро. Страховка от
+        // «зависания» — пульс таймлайна (см. WidgetProvider) + последующие апдейты
+        // (исполнитель/HD), которые сами перезагрузят.
         lastWidgetReload = Date()
         widgetReloadWork?.cancel(); widgetReloadWork = nil
         WidgetCenter.shared.reloadAllTimelines()
-        for delay in [1.5, 4.0] {
-            DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
-                WidgetCenter.shared.reloadAllTimelines()
-            }
-        }
     }
 
     // Дедуп активных запросов статуса лайка (по ключу «title|artist»).
