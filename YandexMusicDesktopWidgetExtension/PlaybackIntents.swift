@@ -119,6 +119,7 @@ struct LikeIntent: AppIntent {
         logger.info("LikeIntent → pending queue")
         AppGroupManager.shared.savePendingAction(.like)
         AppGroupManager.shared.saveLastCommand(.like)
+        AppGroupManager.shared.toggleSavedLike(dislike: false)   // мгновенно заполняем сердечко
         WidgetCenter.shared.reloadAllTimelines()
         return .result()
     }
@@ -136,6 +137,7 @@ struct DislikeIntent: AppIntent {
         logger.info("DislikeIntent → pending queue")
         AppGroupManager.shared.savePendingAction(.dislike)
         AppGroupManager.shared.saveLastCommand(.dislike)
+        AppGroupManager.shared.toggleSavedLike(dislike: true)    // мгновенно отмечаем дизлайк
         WidgetCenter.shared.reloadAllTimelines()
         return .result()
     }

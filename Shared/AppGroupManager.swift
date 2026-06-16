@@ -94,6 +94,19 @@ final class AppGroupManager {
         if let d = try? JSONEncoder().encode(t) { try? d.write(to: url, options: .atomic) }
     }
 
+    /// Оптимистично переключает статус лайка/дизлайка в track.json (мгновенная
+    /// реакция сердечка на виджете). Приложение подтвердит реальный статус через API.
+    func toggleSavedLike(dislike: Bool) {
+        guard let url = fileURL("track.json"), let data = try? Data(contentsOf: url),
+              var t = try? JSONDecoder().decode(TrackInfo.self, from: data) else { return }
+        if dislike {
+            t.likeState = (t.likeState == .disliked) ? .none : .disliked
+        } else {
+            t.likeState = (t.likeState == .liked) ? .none : .liked
+        }
+        if let d = try? JSONEncoder().encode(t) { try? d.write(to: url, options: .atomic) }
+    }
+
     // MARK: - Размерные варианты HD-обложки (под размер виджета)
     // Маленький/средний виджет показывают мелкую обложку — им хватает ~320px (меньше
     // памяти и нагрузки на расширение). Большому нужен ~700px. Храним два файла; если
