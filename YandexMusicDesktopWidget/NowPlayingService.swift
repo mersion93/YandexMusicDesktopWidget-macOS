@@ -518,14 +518,16 @@ final class NowPlayingService: ObservableObject {
         // Чтобы не показывать СТАРОГО исполнителя на новом треке — прячем поле (пусто),
         // пока не придёт настоящий. Настоящий = первый непустой и НЕ равный старому
         // (либо раскрываем старого по таймеру — значит исполнитель тот же).
-        if track.title != oldTitle {
+        if let known = knownArtist[track.title], !known.isEmpty {
+            // Исполнителя этого НАЗВАНИЯ уже знаем — он авторитетный. Показываем
+            // сразу и НЕ даём запоздалому/чужому событию его перебить (это вызывало
+            // мелькание «верно → старый исполнитель → верно» при возврате).
+            track.artist = known
+            if pendingArtist?.title == track.title { pendingArtist = nil; artistRevealWork?.cancel() }
+        } else if track.title != oldTitle {
+            // Новый трек, исполнителя пока не знаем.
             if !track.artist.isEmpty, track.artist != oldArtist {
-                pendingArtist = nil; artistRevealWork?.cancel()
-            } else if let known = knownArtist[track.title], !known.isEmpty {
-                // Этот трек уже играл — исполнителя ЗНАЕМ. Показываем сразу, без маски
-                // и ожидания (возврат на предыдущий трек = мгновенно, данные в кэше).
-                track.artist = known
-                pendingArtist = nil; artistRevealWork?.cancel()
+                pendingArtist = nil; artistRevealWork?.cancel()       // настоящий пришёл сразу
             } else {
                 pendingArtist = (title: track.title, stale: oldArtist)
                 track.artist = ""
@@ -533,9 +535,9 @@ final class NowPlayingService: ObservableObject {
             }
         } else if let pa = pendingArtist, pa.title == track.title {
             if !track.artist.isEmpty, track.artist != pa.stale {
-                pendingArtist = nil; artistRevealWork?.cancel()   // пришёл настоящий
+                pendingArtist = nil; artistRevealWork?.cancel()       // пришёл настоящий
             } else {
-                track.artist = ""                                  // держим пусто
+                track.artist = ""                                      // держим пусто
             }
         }
         track.id = "\(track.title)-\(track.artist)"   // id с учётом маски (стабилен)
