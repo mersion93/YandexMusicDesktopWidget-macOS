@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!-- Песочница ВЫКЛЮЧЕНА: приложение в песочнице не может управлять
+	     другими программами через Accessibility (нужно для лайка/дизлайка
+	     и чтения трека из Яндекс Музыки) и слать медиа-клавиши. -->
+	<key>com.apple.security.app-sandbox</key>
+	<false/>
+	<!-- App Group оставляем — через него виджет получает данные. -->
+	<key>com.apple.security.application-groups</key>
+	<array>
+		<string>group.com.yandexmusic.widget</string>
+	</array>
+</dict>
+</plist>

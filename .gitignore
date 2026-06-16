@@ -1,0 +1,20 @@
+# Сборки
+build/
+DerivedData/
+*.xcarchive
+
+# Релизные артефакты (DMG раздаём через GitHub Releases, не в git)
+release_tools/dist/
+release_tools/*.dmg
+
+# Xcode пользовательское
+xcuserdata/
+*.xcuserstate
+*.xcscmblueprint
+
+# macOS
+.DS_Store
+
+# Прочее
+*.swiftpm
+.build/
