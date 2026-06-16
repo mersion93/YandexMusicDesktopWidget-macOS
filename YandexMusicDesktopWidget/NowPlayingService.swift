@@ -49,6 +49,24 @@ final class NowPlayingService: ObservableObject {
     /// «застывал» до следующего пульса (60с). Повторы через 1.5с и 4с ловят
     /// отброшенный пуш. Срабатывает только при реальной смене трека/паузы,
     /// не постоянно — поэтому бюджет WidgetKit не страдает.
+    private var awaitingHDReload = false
+    private var newTrackReloadWork: DispatchWorkItem?
+
+    /// Перезагрузка виджета при СМЕНЕ трека: ждём HD-обложку (применится в
+    /// cacheAndApplyHD и перезагрузит сразу) или фолбэк по таймауту с родной.
+    /// Так виджет обновляется ОДИН раз — без дёрганья «родная → HD».
+    private func scheduleNewTrackWidgetReload() {
+        awaitingHDReload = true
+        newTrackReloadWork?.cancel()
+        let work = DispatchWorkItem { [weak self] in
+            guard let self, self.awaitingHDReload else { return }
+            self.awaitingHDReload = false
+            WidgetCenter.shared.reloadAllTimelines()   // фолбэк: показываем что есть (родная)
+        }
+        newTrackReloadWork = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5, execute: work)
+    }
+
     private func reloadWidgetForcefully() {
         lastWidgetReload = Date()
         widgetReloadWork?.cancel(); widgetReloadWork = nil
@@ -402,18 +420,22 @@ final class NowPlayingService: ObservableObject {
             applyTrack(track, source: .mediaRemote)
             return
         }
-        // Только СМЕНА трека: короткая склейка частичных событий (название → чуть
-        // позже исполнитель/обложка). Ждём ~70мс тишины и применяем последнее,
-        // самое полное — без рассинхрона текста и без чужой обложки на миг.
+        // СМЕНА трека: склейка частичных событий. Адаптер шлёт название на ~0.3-0.5с
+        // РАНЬШЕ исполнителя. Если у нового трека название сменилось, а исполнитель
+        // ВСЁ ЕЩЁ как у старого — это недособранное событие: ждём дольше, пока придёт
+        // настоящий исполнитель (он отменит таймер и применится за 70мс). Если новый
+        // исполнитель уже пришёл — короткая склейка.
         pendingNativeTrack = track
         nativeApplyWork?.cancel()
+        let looksIncomplete = (track.title != currentTrack.title) && (track.artist == currentTrack.artist)
+        let delay = looksIncomplete ? 0.6 : 0.07
         let work = DispatchWorkItem { [weak self] in
             guard let self, let t = self.pendingNativeTrack else { return }
             self.pendingNativeTrack = nil
             self.applyTrack(t, source: .mediaRemote)
         }
         nativeApplyWork = work
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.07, execute: work)
+        DispatchQueue.main.asyncAfter(deadline: .now() + delay, execute: work)
     }
 
     private func applyTrack(_ rawTrack: TrackInfo, source: TrackReadSource) {
@@ -484,9 +506,15 @@ final class NowPlayingService: ObservableObject {
             lastSignificantLike    = track.likeState
             AppGroupManager.shared.saveTrack(track)
             AppGroupManager.shared.saveSyncStatus(.synced)
-            // Смена трека/паузы — НАДЁЖНАЯ перезагрузка с бэкапами (иногда система
-            // отбрасывает одиночный пуш под нагрузкой → виджет «застывал» до пульса).
-            reloadWidgetForcefully()
+            if idChanged {
+                // СМЕНА трека: ждём HD-обложку и перезагружаем виджет ОДИН раз уже с ней
+                // (или родной по таймауту). Иначе виджет дёргался дважды: родная → HD —
+                // это и читалось как «задумчиво». HD из кэша применится сразу.
+                scheduleNewTrackWidgetReload()
+            } else {
+                // Пауза/лайк того же трека — мгновенная перезагрузка.
+                reloadWidgetForcefully()
+            }
             logger.debug("Трек изменился: «\(track.title)» / \(source.rawValue) / играет=\(track.isPlaying)")
         }
 
@@ -624,7 +652,14 @@ final class NowPlayingService: ObservableObject {
         guard currentTrack.id == track.id, currentTrack.artworkData != data else { return }
         currentTrack.artworkData = data
         AppGroupManager.shared.saveTrack(currentTrack)
-        reloadWidgetDebounced()
+        if awaitingHDReload {
+            // Это та самая ОДНА чистая перезагрузка нового трека — уже с HD-обложкой.
+            awaitingHDReload = false
+            newTrackReloadWork?.cancel(); newTrackReloadWork = nil
+                WidgetCenter.shared.reloadAllTimelines()
+        } else {
+            reloadWidgetDebounced()
+        }
     }
 
     /// Выполняет команду из виджета. Медиаклавиши (play/next/prev) работают для любого
