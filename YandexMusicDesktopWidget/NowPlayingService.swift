@@ -391,9 +391,25 @@ final class NowPlayingService: ObservableObject {
     }
 
     /// Применяет трек из системного стрима (основной источник).
+    private var pendingNativeTrack: TrackInfo?
+    private var nativeApplyWork: DispatchWorkItem?
+
     private func applyNativeTrack(_ track: TrackInfo) {
         hasStreamData = true
-        applyTrack(track, source: .mediaRemote)
+        // Склейка «пачки» событий: при смене трека адаптер часто шлёт данные
+        // несколькими событиями подряд (сначала название, через миг исполнитель/
+        // обложка). Ждём ~120мс тишины и применяем ПОСЛЕДНЕЕ, самое полное событие —
+        // тогда название/исполнитель/обложка появляются вместе, без рассинхрона и
+        // без подмешивания чужой/прошлой картинки.
+        pendingNativeTrack = track
+        nativeApplyWork?.cancel()
+        let work = DispatchWorkItem { [weak self] in
+            guard let self, let t = self.pendingNativeTrack else { return }
+            self.pendingNativeTrack = nil
+            self.applyTrack(t, source: .mediaRemote)
+        }
+        nativeApplyWork = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.12, execute: work)
     }
 
     private func applyTrack(_ rawTrack: TrackInfo, source: TrackReadSource) {
@@ -430,10 +446,9 @@ final class NowPlayingService: ObservableObject {
         if !idChanged, likeOverrides[track.id] == nil {
             track.likeState = currentTrack.likeState
         }
-        // Обложка приходит отдельным событием чуть позже названия. Если в этом
-        // событии её нет — держим предыдущую (а не nil), чтобы не мелькал чёрный
-        // квадрат/плейсхолдер и не было видно «провала качества» при переключении.
-        if (track.artworkData?.isEmpty ?? true), let prevArt = currentTrack.artworkData, !prevArt.isEmpty {
+        // Держим обложку между событиями ТОГО ЖЕ трека (она иногда приходит позже),
+        // но НЕ переносим её на НОВЫЙ трек — иначе на миг видно чужую/прошлую картинку.
+        if !idChanged, (track.artworkData?.isEmpty ?? true), let prevArt = currentTrack.artworkData, !prevArt.isEmpty {
             track.artworkData = prevArt
         }
         if idChanged {
