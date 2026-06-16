@@ -21,6 +21,9 @@ struct PlayPauseIntent: AppIntent {
         logger.info("PlayPauseIntent → pending queue")
         AppGroupManager.shared.savePendingAction(.playPause)
         AppGroupManager.shared.saveLastCommand(.playPause)
+        // Оптимистично переключаем иконку СРАЗУ (приложение подтвердит реальный статус
+        // через ~0.5с). Иначе иконка play/pause обновлялась с задержкой.
+        AppGroupManager.shared.toggleSavedPlaying()
         WidgetCenter.shared.reloadAllTimelines()
         return .result()
     }

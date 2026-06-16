@@ -85,6 +85,15 @@ final class AppGroupManager {
         return track
     }
 
+    /// Оптимистично переворачивает isPlaying в track.json (для мгновенной смены
+    /// иконки play/pause на виджете сразу при нажатии). Обложку НЕ трогает.
+    func toggleSavedPlaying() {
+        guard let url = fileURL("track.json"), let data = try? Data(contentsOf: url),
+              var t = try? JSONDecoder().decode(TrackInfo.self, from: data) else { return }
+        t.isPlaying.toggle()
+        if let d = try? JSONEncoder().encode(t) { try? d.write(to: url, options: .atomic) }
+    }
+
     // MARK: - Размерные варианты HD-обложки (под размер виджета)
     // Маленький/средний виджет показывают мелкую обложку — им хватает ~320px (меньше
     // памяти и нагрузки на расширение). Большому нужен ~700px. Храним два файла; если
