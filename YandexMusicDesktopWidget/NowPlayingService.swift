@@ -417,6 +417,23 @@ final class NowPlayingService: ObservableObject {
     private var pendingArtist: (title: String, stale: String)?
     private var artistRevealWork: DispatchWorkItem?
 
+    // Виджет ждёт HD-обложку (не показываем низкокачественную родную). Фолбэк —
+    // если HD так и не пришла, через 1.3с пишем в виджет родную.
+    private var widgetAwaitingHDArt = false
+    private var widgetArtFallbackWork: DispatchWorkItem?
+    private func scheduleWidgetNativeFallback(for track: TrackInfo) {
+        widgetAwaitingHDArt = true
+        widgetArtFallbackWork?.cancel()
+        let work = DispatchWorkItem { [weak self] in
+            guard let self, self.widgetAwaitingHDArt, self.currentTrack.title == track.title else { return }
+            self.widgetAwaitingHDArt = false
+            AppGroupManager.shared.saveTrack(self.currentTrack)   // HD не пришла — пишем родную
+            self.reloadWidgetDebounced()
+        }
+        widgetArtFallbackWork = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.3, execute: work)
+    }
+
     /// Если настоящий исполнитель так и не пришёл за 0.8с — значит он ТОТ ЖЕ, что был
     /// (трек того же артиста). Показываем его и снимаем маску.
     private func scheduleArtistReveal(stale: String, forTitle title: String) {
@@ -546,12 +563,18 @@ final class NowPlayingService: ObservableObject {
             lastSignificantPlaying = track.isPlaying
             lastArtworkPresent     = (track.artworkData != nil)
             lastSignificantLike    = track.likeState
-            AppGroupManager.shared.saveTrack(track)
+            // На СМЕНЕ трека (если ждём HD из API) в виджет родную низкокачественную
+            // обложку НЕ пишем — на большом full-bleed она мылит. Показываем чистый
+            // плейсхолдер, пока не придёт HD (как маска исполнителя). Попап/окно берут
+            // обложку из currentTrack (там она мелкая — родная норм).
+            let expectingHD = idChanged && track.isYandex && YandexMusicAPI.shared.isAuthorized
+            var widgetTrack = track
+            if expectingHD {
+                widgetTrack.artworkData = nil
+                scheduleWidgetNativeFallback(for: track)
+            }
+            AppGroupManager.shared.saveTrack(widgetTrack)
             AppGroupManager.shared.saveSyncStatus(.synced)
-            // Перезагружаем СРАЗУ (название+родная обложка без задержки). HD-обложка
-            // подменится отдельно через cacheAndApplyHD и плавно «дорисуется» (ключ
-            // обложки в виджете завязан на содержимое → мягкий кросс-фейд). Так мы НЕ
-            // копим задержки (раньше маска исполнителя + ожидание HD складывались в ~1с).
             reloadWidgetForcefully()
             logger.debug("Трек изменился: «\(track.title)» / \(source.rawValue) / играет=\(track.isPlaying)")
         }
@@ -691,15 +714,11 @@ final class NowPlayingService: ObservableObject {
         if hdCoverCache.count > 60 { hdCoverCache.removeAll(); hdCoverCache[apiId] = data }
         guard currentTrack.id == track.id, currentTrack.artworkData != data else { return }
         currentTrack.artworkData = data
+        // HD пришла — отменяем фолбэк родной и пишем HD в виджет.
+        widgetAwaitingHDArt = false
+        widgetArtFallbackWork?.cancel(); widgetArtFallbackWork = nil
         AppGroupManager.shared.saveTrack(currentTrack)
-        if awaitingHDReload {
-            // Это та самая ОДНА чистая перезагрузка нового трека — уже с HD-обложкой.
-            awaitingHDReload = false
-            newTrackReloadWork?.cancel(); newTrackReloadWork = nil
-                WidgetCenter.shared.reloadAllTimelines()
-        } else {
-            reloadWidgetDebounced()
-        }
+        reloadWidgetDebounced()
     }
 
     /// Выполняет команду из виджета. Медиаклавиши (play/next/prev) работают для любого

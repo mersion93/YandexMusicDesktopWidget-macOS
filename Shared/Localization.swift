@@ -7,22 +7,23 @@ import Foundation
 enum AppLang {
     static let key = "app_language"   // "auto" | "ru" | "en"
 
-    /// Текущий язык интерфейса ("ru"/"en"), кэшируется в памяти.
-    static private(set) var current: String = resolve()
-
-    static func resolve() -> String {
-        // Приложение: UserDefaults.standard (его пишет @AppStorage пикера — для
-        // мгновенного переключения). Виджет: общий файл App Group (у него свой
-        // UserDefaults). Иначе — системный язык.
-        if let s = UserDefaults.standard.string(forKey: key), s == "ru" || s == "en" { return s }
-        let f = AppGroupManager.shared.loadLanguage()
-        if f == "ru" || f == "en" { return f }
+    /// Текущий язык интерфейса ("ru"/"en") — ВЫЧИСЛЯЕТСЯ на лету (не кэшируется),
+    /// чтобы перерисовка от смены @AppStorage сразу брала свежий язык.
+    static var current: String {
+        // Приложение: @AppStorage пишет в UserDefaults.standard (мгновенно).
+        let u = UserDefaults.standard.string(forKey: key)
+        if u == "ru" || u == "en" { return u! }
+        // Виджет: своего UserDefaults для этого ключа нет (nil) → берём общий файл.
+        if u == nil {
+            let f = AppGroupManager.shared.loadLanguage()
+            if f == "ru" || f == "en" { return f }
+        }
+        // "auto" или нет выбора — системный язык.
         let sys = Locale.preferredLanguages.first?.lowercased() ?? "en"
         return sys.hasPrefix("ru") ? "ru" : "en"
     }
 
-    /// Перечитать после смены настройки.
-    static func refresh() { current = resolve() }
+    static func refresh() {}   // больше не нужно: current вычисляется при каждом обращении
 }
 
 /// Возвращает строку на текущем языке. Использование: `tr("Настройки", "Settings")`.
