@@ -396,11 +396,15 @@ final class NowPlayingService: ObservableObject {
 
     private func applyNativeTrack(_ track: TrackInfo) {
         hasStreamData = true
-        // Склейка «пачки» событий: при смене трека адаптер часто шлёт данные
-        // несколькими событиями подряд (сначала название, через миг исполнитель/
-        // обложка). Ждём ~120мс тишины и применяем ПОСЛЕДНЕЕ, самое полное событие —
-        // тогда название/исполнитель/обложка появляются вместе, без рассинхрона и
-        // без подмешивания чужой/прошлой картинки.
+        // Тот же трек (позиция/пауза/обновление обложки) — применяем СРАЗУ, чтобы
+        // не замедлять виджет и попап.
+        if track.id == currentTrack.id, pendingNativeTrack == nil {
+            applyTrack(track, source: .mediaRemote)
+            return
+        }
+        // Только СМЕНА трека: короткая склейка частичных событий (название → чуть
+        // позже исполнитель/обложка). Ждём ~70мс тишины и применяем последнее,
+        // самое полное — без рассинхрона текста и без чужой обложки на миг.
         pendingNativeTrack = track
         nativeApplyWork?.cancel()
         let work = DispatchWorkItem { [weak self] in
@@ -409,7 +413,7 @@ final class NowPlayingService: ObservableObject {
             self.applyTrack(t, source: .mediaRemote)
         }
         nativeApplyWork = work
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.12, execute: work)
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.07, execute: work)
     }
 
     private func applyTrack(_ rawTrack: TrackInfo, source: TrackReadSource) {
