@@ -416,6 +416,14 @@ final class NowPlayingService: ObservableObject {
     // трека, прячем поле. stale — исполнитель прошлого трека (его не показываем).
     private var pendingArtist: (title: String, stale: String)?
     private var artistRevealWork: DispatchWorkItem?
+    // Кэш «название → исполнитель» для уже игравших треков: при возврате на трек
+    // показываем исполнителя сразу, не дожидаясь, пока адаптер пришлёт его заново.
+    private var knownArtist: [String: String] = [:]
+    private func rememberArtist(_ title: String, _ artist: String) {
+        guard !artist.isEmpty else { return }
+        if knownArtist.count > 150 { knownArtist.removeAll() }
+        knownArtist[title] = artist
+    }
 
     // Виджет ждёт HD-обложку (не показываем низкокачественную родную). Фолбэк —
     // если HD так и не пришла, через 1.3с пишем в виджет родную.
@@ -513,6 +521,11 @@ final class NowPlayingService: ObservableObject {
         if track.title != oldTitle {
             if !track.artist.isEmpty, track.artist != oldArtist {
                 pendingArtist = nil; artistRevealWork?.cancel()
+            } else if let known = knownArtist[track.title], !known.isEmpty {
+                // Этот трек уже играл — исполнителя ЗНАЕМ. Показываем сразу, без маски
+                // и ожидания (возврат на предыдущий трек = мгновенно, данные в кэше).
+                track.artist = known
+                pendingArtist = nil; artistRevealWork?.cancel()
             } else {
                 pendingArtist = (title: track.title, stale: oldArtist)
                 track.artist = ""
@@ -526,6 +539,7 @@ final class NowPlayingService: ObservableObject {
             }
         }
         track.id = "\(track.title)-\(track.artist)"   // id с учётом маски (стабилен)
+        rememberArtist(track.title, track.artist)     // запоминаем для быстрых возвратов
 
         let idChanged = track.id != currentTrack.id
         // Лайк и обложку держим между событиями ТОГО ЖЕ трека (по названию — чтобы
@@ -570,8 +584,13 @@ final class NowPlayingService: ObservableObject {
             let expectingHD = idChanged && track.isYandex && YandexMusicAPI.shared.isAuthorized
             var widgetTrack = track
             if expectingHD {
-                widgetTrack.artworkData = nil
-                scheduleWidgetNativeFallback(for: track)
+                // Если HD уже в кэше (трек играл) — ставим её СРАЗУ, без плейсхолдера.
+                if let apiId = apiTrackIdMap[apiKey(track)], let hd = hdCoverCache[apiId] {
+                    widgetTrack.artworkData = hd
+                } else {
+                    widgetTrack.artworkData = nil      // ждём HD
+                    scheduleWidgetNativeFallback(for: track)
+                }
             }
             AppGroupManager.shared.saveTrack(widgetTrack)
             AppGroupManager.shared.saveSyncStatus(.synced)
