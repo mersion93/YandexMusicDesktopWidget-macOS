@@ -61,11 +61,13 @@ final class AppGroupManager {
         } catch {
             logger.error("Ошибка сохранения трека: \(error.localizedDescription)")
         }
-        // Обложка: пишем только когда реально изменилась (сравнение байт — дёшево).
-        if let artURL = fileURL("artwork.dat"), art != lastArtwork {
+        // Обложка: пишем ТОЛЬКО непустую и только при изменении. На nil НЕ удаляем —
+        // при смене трека обложка часто приходит отдельным событием позже названия,
+        // и удаление давало чёрный квадрат в виджете / мелькание в попапе. Держим
+        // последнюю хорошую, пока не придёт новая.
+        if let artURL = fileURL("artwork.dat"), let art, !art.isEmpty, art != lastArtwork {
             lastArtwork = art
-            if let art, !art.isEmpty { try? art.write(to: artURL, options: .atomic) }
-            else { try? FileManager.default.removeItem(at: artURL) }
+            try? art.write(to: artURL, options: .atomic)
         }
     }
 

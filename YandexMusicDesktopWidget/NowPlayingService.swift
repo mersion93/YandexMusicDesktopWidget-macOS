@@ -428,6 +428,12 @@ final class NowPlayingService: ObservableObject {
         if !idChanged, likeOverrides[track.id] == nil {
             track.likeState = currentTrack.likeState
         }
+        // Обложка приходит отдельным событием чуть позже названия. Если в этом
+        // событии её нет — держим предыдущую (а не nil), чтобы не мелькал чёрный
+        // квадрат/плейсхолдер и не было видно «провала качества» при переключении.
+        if (track.artworkData?.isEmpty ?? true), let prevArt = currentTrack.artworkData, !prevArt.isEmpty {
+            track.artworkData = prevArt
+        }
         if idChanged {
             // Анимируем переход между треками через SwiftUI transaction
             withAnimation(.spring(response: 0.38, dampingFraction: 0.82)) {
