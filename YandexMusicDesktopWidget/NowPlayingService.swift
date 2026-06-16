@@ -77,8 +77,13 @@ final class NowPlayingService: ObservableObject {
     // храним оптимистичный статус по id трека — он отражает действия пользователя.
     private var likeOverrides: [String: LikeState] = [:]
 
-    // Маппинг «title|artist» → id трека в каталоге ЯМ (для лайка и обложки через API).
+    // Маппинг ключа → id трека в каталоге ЯМ (для лайка и обложки через API).
+    // Ключ включает длительность: у одной песни бывает несколько track-id с разной
+    // длительностью (разные альбомы), и без этого они бы перетирали друг друга.
     private var apiTrackIdMap: [String: String] = [:]
+    private func apiKey(_ t: TrackInfo) -> String {
+        "\(t.title)|\(t.artist)|\(Int(t.duration.rounded()))"
+    }
     // Длительность трека из API по ключу «title|artist» (для полоски прогресса).
     private var apiDurationMap: [String: TimeInterval] = [:]
     // Обложка высокого разрешения (1000×1000) по id трека ЯМ — чтобы в большом
@@ -132,10 +137,17 @@ final class NowPlayingService: ObservableObject {
 
         // Если уже авторизованы — подгружаем список лайков (для синхронизации статуса)
         YandexMusicAPI.shared.refreshOnLaunch()
-        // Периодически обновляем лайки — на случай, если трек лайкнули в самой ЯМ
+        // Периодически обновляем лайки — на случай, если трек лайкнули в самой ЯМ.
+        // После обновления списка пере-сверяем статус ТЕКУЩЕГО трека, чтобы виджет
+        // показал актуальный лайк, даже если трек не переключался.
         likesTimer = Timer.publish(every: 120, on: .main, in: .common)
             .autoconnect()
-            .sink { _ in YandexMusicAPI.shared.refreshLikes() }
+            .sink { [weak self] _ in
+                YandexMusicAPI.shared.refreshLikes { [weak self] in
+                    guard let self else { return }
+                    self.refreshCurrentLikeStatus()
+                }
+            }
 
         fetchNowPlaying()
         logger.info("NowPlayingService запущен, опрос каждые \(Constants.Timing.nowPlayingRefreshInterval) с")
@@ -225,7 +237,7 @@ final class NowPlayingService: ObservableObject {
         guard isYandexActive else { return }
         // Путь через API Яндекса — надёжно ставит/снимает лайк по id трека.
         if YandexMusicAPI.shared.isAuthorized {
-            let key = "\(currentTrack.title)|\(currentTrack.artist)"
+            let key = apiKey(currentTrack)
             if let apiId = apiTrackIdMap[key] {
                 let newLiked = currentTrack.likeState != .liked
                 currentTrack.likeState = newLiked ? .liked : .none   // оптимистично
@@ -239,11 +251,11 @@ final class NowPlayingService: ObservableObject {
                 }
                 return
             }
-            // id ещё не найден — ищем и затем лайкаем
-            YandexMusicAPI.shared.searchTrack(title: currentTrack.title, artist: currentTrack.artist) { [weak self] apiTrack in
+            // id ещё не найден — ищем ПО ДЛИТЕЛЬНОСТИ (точная запись) и затем лайкаем
+            let dur = currentTrack.duration
+            YandexMusicAPI.shared.searchTrack(title: currentTrack.title, artist: currentTrack.artist, duration: dur) { [weak self] apiTrack in
                 guard let self, let apiTrack else { return }
-                let key2 = "\(self.currentTrack.title)|\(self.currentTrack.artist)"
-                self.apiTrackIdMap[key2] = apiTrack.id
+                self.apiTrackIdMap[self.apiKey(self.currentTrack)] = apiTrack.id
                 YandexMusicAPI.shared.setLike(trackId: apiTrack.id, liked: true) { ok in
                     guard ok else { return }
                     self.currentTrack.likeState = .liked
@@ -444,9 +456,16 @@ final class NowPlayingService: ObservableObject {
         enrichLikeStatus(track)
     }
 
-    /// Находит id трека в каталоге ЯМ (по названию+артисту) и выставляет реальный статус лайка.
+    /// Пере-сверяет статус лайка текущего трека по свежему списку лайков
+    /// (вызывается после периодического refreshLikes).
+    private func refreshCurrentLikeStatus() {
+        enrichTrack(currentTrack)
+    }
+
+    /// Находит id трека в каталоге ЯМ (по названию+артисту+длительности) и выставляет
+    /// реальный статус лайка. Длительность важна: у песни бывает несколько track-id.
     private func enrichLikeStatus(_ track: TrackInfo) {
-        let key = "\(track.title)|\(track.artist)"
+        let key = apiKey(track)
 
         // Уже знаем id — сверяем лайк и применяем HD-обложку (из кэша или докачиваем).
         if let apiId = apiTrackIdMap[key] {
@@ -464,7 +483,7 @@ final class NowPlayingService: ObservableObject {
         guard !fetchingArtwork.contains(key) else { return }
         fetchingArtwork.insert(key)
 
-        YandexMusicAPI.shared.searchTrack(title: track.title, artist: track.artist) { [weak self] apiTrack in
+        YandexMusicAPI.shared.searchTrack(title: track.title, artist: track.artist, duration: track.duration) { [weak self] apiTrack in
             DispatchQueue.main.async {
                 guard let self else { return }
                 self.fetchingArtwork.remove(key)
@@ -499,7 +518,7 @@ final class NowPlayingService: ObservableObject {
         }
         guard !hdCoverFetching.contains(apiId) else { return }
         hdCoverFetching.insert(apiId)
-        YandexMusicAPI.shared.highResCover(title: track.title, artist: track.artist) { [weak self] data in
+        YandexMusicAPI.shared.highResCover(title: track.title, artist: track.artist, duration: track.duration) { [weak self] data in
             DispatchQueue.main.async {
                 guard let self else { return }
                 self.hdCoverFetching.remove(apiId)

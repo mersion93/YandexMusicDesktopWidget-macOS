@@ -113,8 +113,12 @@ final class YandexMusicAPI {
         let duration: TimeInterval   // секунды, 0 если неизвестно
     }
 
-    /// Ищет трек в каталоге ЯМ по «исполнитель название», возвращает id + обложку.
-    func searchTrack(title: String, artist: String, completion: @escaping (APITrack?) -> Void) {
+    /// Ищет трек в каталоге ЯМ по «исполнитель название». Если задана `duration`
+    /// (длительность играющего трека из системы), выбирает ИМЕННО ту запись —
+    /// у одной песни бывает несколько track-id (разные альбомы/синглы) с разной
+    /// длительностью, и без этого мы лайкали/проверяли чужой id.
+    func searchTrack(title: String, artist: String, duration: TimeInterval = 0,
+                     completion: @escaping (APITrack?) -> Void) {
         let text = "\(artist) \(title)".trimmingCharacters(in: .whitespaces)
         guard !text.isEmpty else { completion(nil); return }
         request("/search", query: [
@@ -126,9 +130,23 @@ final class YandexMusicAPI {
             guard let result = json?["result"] as? [String: Any],
                   let tracks = result["tracks"] as? [String: Any],
                   let items = tracks["results"] as? [[String: Any]],
-                  let first = items.first else { completion(nil); return }
-            completion(self.parseTrack(first))
+                  !items.isEmpty else { completion(nil); return }
+            completion(self.bestMatch(items, title: title, duration: duration))
         }
+    }
+
+    /// Выбирает из результатов поиска запись, максимально близкую играющему треку:
+    /// сначала точное совпадение названия, затем — ближайшую по длительности.
+    private func bestMatch(_ items: [[String: Any]], title: String, duration: TimeInterval) -> APITrack? {
+        let parsed = items.compactMap { parseTrack($0) }
+        guard !parsed.isEmpty else { return nil }
+        let lower = title.lowercased()
+        let titleMatched = parsed.filter { $0.title.lowercased() == lower }
+        let pool = titleMatched.isEmpty ? parsed : titleMatched
+        if duration > 1 {
+            return pool.min { abs($0.duration - duration) < abs($1.duration - duration) }
+        }
+        return pool.first
     }
 
     private func parseTrack(_ d: [String: Any]) -> APITrack? {
@@ -155,8 +173,9 @@ final class YandexMusicAPI {
 
     /// Обложка высокого разрешения (1000×1000) для трека — со СТРОГОЙ проверкой
     /// совпадения названия, чтобы не подставить чужую картинку. nil — если не уверены.
-    func highResCover(title: String, artist: String, completion: @escaping (Data?) -> Void) {
-        searchTrack(title: title, artist: artist) { [weak self] t in
+    func highResCover(title: String, artist: String, duration: TimeInterval = 0,
+                      completion: @escaping (Data?) -> Void) {
+        searchTrack(title: title, artist: artist, duration: duration) { [weak self] t in
             guard let self, let t,
                   t.title.lowercased() == title.lowercased(),   // строгое совпадение названия
                   let url0 = t.coverURL else { completion(nil); return }

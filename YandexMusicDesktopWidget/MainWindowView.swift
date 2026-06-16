@@ -178,7 +178,7 @@ struct NowPlayingPane: View {
         let t = track
         guard t.isYandex, YandexMusicAPI.shared.isAuthorized,
               t.title != Constants.Media.notRunningTitle else { return }
-        YandexMusicAPI.shared.highResCover(title: t.title, artist: t.artist) { data in
+        YandexMusicAPI.shared.highResCover(title: t.title, artist: t.artist, duration: t.duration) { data in
             DispatchQueue.main.async {
                 // применяем только если трек ещё тот же
                 guard self.track.id == t.id, let data else { return }
