@@ -87,10 +87,12 @@ final class NowPlayingService: ObservableObject {
     }
     // Длительность трека из API по ключу «title|artist» (для полоски прогресса).
     private var apiDurationMap: [String: TimeInterval] = [:]
-    // Обложка высокого разрешения (1000×1000) по id трека ЯМ — чтобы в большом
-    // виджете не было пикселизации (родная из стрима ~300px, на full-bleed мылит).
+    // Обложка высокого разрешения по id трека ЯМ — чтобы в большом виджете не было
+    // пикселизации (родная из стрима ~300px, на full-bleed мылит). Храним прямой URL
+    // обложки, чтобы при повторной докачке не делать второй /search.
     private var hdCoverCache: [String: Data] = [:]
     private var hdCoverFetching: Set<String> = []
+    private var apiCoverURLMap: [String: URL] = [:]
 
     private init() {
         if !MediaRemoteHelper.isAvailable {
@@ -510,6 +512,7 @@ final class NowPlayingService: ObservableObject {
                       let url0 = apiTrack.coverURL else { return }
                 let bigStr = url0.absoluteString.replacingOccurrences(of: "400x400", with: "1000x1000")
                 guard let bigURL = URL(string: bigStr) else { return }
+                self.apiCoverURLMap[key] = bigURL   // запоминаем — чтобы не искать повторно
                 self.fetchHDCover(bigURL, apiId: apiTrack.id, for: track)
             }
         }
@@ -526,13 +529,24 @@ final class NowPlayingService: ObservableObject {
             return
         }
         guard !hdCoverFetching.contains(apiId) else { return }
+        // Знаем прямой URL обложки — качаем по нему через fetchHDCover (он даунскейлит),
+        // без повторного /search.
+        if let url = apiCoverURLMap[apiKey(track)] {
+            fetchHDCover(url, apiId: apiId, for: track)
+            return
+        }
         hdCoverFetching.insert(apiId)
         YandexMusicAPI.shared.highResCover(title: track.title, artist: track.artist, duration: track.duration) { [weak self] data in
+            // Даунскейл на фоне (как в fetchHDCover) — иначе хранили бы полный 1000px.
+            guard let data, !data.isEmpty else {
+                DispatchQueue.main.async { self?.hdCoverFetching.remove(apiId) }
+                return
+            }
+            let scaled = NowPlayingService.downscaledArtwork(data) ?? data
             DispatchQueue.main.async {
                 guard let self else { return }
                 self.hdCoverFetching.remove(apiId)
-                guard let data, !data.isEmpty else { return }
-                self.cacheAndApplyHD(data, apiId: apiId, for: track)
+                self.cacheAndApplyHD(scaled, apiId: apiId, for: track)
             }
         }
     }
@@ -543,13 +557,45 @@ final class NowPlayingService: ObservableObject {
         guard !hdCoverFetching.contains(apiId) else { return }
         hdCoverFetching.insert(apiId)
         YandexMusicAPI.shared.fetchCover(url) { [weak self] data in
+            // Даунскейл делаем на фоне (тяжёлый рендер не на главном потоке).
+            guard let data, !data.isEmpty else {
+                DispatchQueue.main.async { self?.hdCoverFetching.remove(apiId) }
+                return
+            }
+            let scaled = NowPlayingService.downscaledArtwork(data) ?? data
             DispatchQueue.main.async {
                 guard let self else { return }
                 self.hdCoverFetching.remove(apiId)
-                guard let data, !data.isEmpty else { return }
-                self.cacheAndApplyHD(data, apiId: apiId, for: track)
+                self.cacheAndApplyHD(scaled, apiId: apiId, for: track)
             }
         }
+    }
+
+    /// Уменьшает обложку до ~700px и пережимает в JPEG. 1000×1000 виджету/попапу не
+    /// нужны (виджет рендерит <~700px), а меньший размер = меньше байт в App Group и
+    /// быстрее декодирование при каждом рендере виджета. Возвращает nil при ошибке.
+    static func downscaledArtwork(_ data: Data, maxDim: CGFloat = 700) -> Data? {
+        // По ПИКСЕЛЯМ (а не NSImage.size в точках — он зависит от DPI и может
+        // ошибочно посчитать обложку «маленькой»).
+        guard let src = NSBitmapImageRep(data: data) else { return nil }
+        let pw = src.pixelsWide, ph = src.pixelsHigh
+        guard pw > 0, ph > 0 else { return nil }
+        let maxSide = max(pw, ph)
+        if CGFloat(maxSide) <= maxDim { return data }   // уже мелкая
+        let scale = maxDim / CGFloat(maxSide)
+        let newW = max(1, Int((CGFloat(pw) * scale).rounded()))
+        let newH = max(1, Int((CGFloat(ph) * scale).rounded()))
+        guard let dst = NSBitmapImageRep(
+            bitmapDataPlanes: nil, pixelsWide: newW, pixelsHigh: newH,
+            bitsPerSample: 8, samplesPerPixel: 3, hasAlpha: false, isPlanar: false,
+            colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 0) else { return nil }
+        dst.size = NSSize(width: newW, height: newH)
+        NSGraphicsContext.saveGraphicsState()
+        NSGraphicsContext.current = NSGraphicsContext(bitmapImageRep: dst)
+        NSGraphicsContext.current?.imageInterpolation = .high
+        src.draw(in: NSRect(x: 0, y: 0, width: newW, height: newH))
+        NSGraphicsContext.restoreGraphicsState()
+        return dst.representation(using: .jpeg, properties: [.compressionFactor: 0.82])
     }
 
     private func cacheAndApplyHD(_ data: Data, apiId: String, for track: TrackInfo) {

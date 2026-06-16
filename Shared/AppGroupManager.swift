@@ -42,25 +42,42 @@ final class AppGroupManager {
 
     // MARK: - Track
 
+    // Обложку держим ОТДЕЛЬНЫМ файлом, а не внутри track.json. Тогда метаданные
+    // (название/пауза/лайк) — это крошечный JSON, который пишется часто и дёшево,
+    // а тяжёлая обложка (~70–150 КБ) переписывается ТОЛЬКО когда реально меняется.
+    private var lastArtwork: Data?
+
     func saveTrack(_ track: TrackInfo) {
         guard let url = fileURL("track.json") else {
             logger.error("Контейнер недоступен — трек не сохранён")
             return
         }
+        var meta = track
+        let art = track.artworkData
+        meta.artworkData = nil   // обложка — отдельным файлом
         do {
-            let data = try JSONEncoder().encode(track)
+            let data = try JSONEncoder().encode(meta)
             try data.write(to: url, options: .atomic)
-            logger.debug("Трек сохранён: \(track.title) — \(track.artist)")
         } catch {
             logger.error("Ошибка сохранения трека: \(error.localizedDescription)")
+        }
+        // Обложка: пишем только когда реально изменилась (сравнение байт — дёшево).
+        if let artURL = fileURL("artwork.dat"), art != lastArtwork {
+            lastArtwork = art
+            if let art, !art.isEmpty { try? art.write(to: artURL, options: .atomic) }
+            else { try? FileManager.default.removeItem(at: artURL) }
         }
     }
 
     func loadTrack() -> TrackInfo {
         guard let url = fileURL("track.json"),
               let data = try? Data(contentsOf: url),
-              let track = try? JSONDecoder().decode(TrackInfo.self, from: data) else {
+              var track = try? JSONDecoder().decode(TrackInfo.self, from: data) else {
             return TrackInfo.notRunning
+        }
+        // Подцепляем обложку из отдельного файла.
+        if let artURL = fileURL("artwork.dat"), let art = try? Data(contentsOf: artURL), !art.isEmpty {
+            track.artworkData = art
         }
         return track
     }
