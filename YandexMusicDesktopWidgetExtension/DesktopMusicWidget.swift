@@ -213,11 +213,15 @@ struct LargeWidgetView: View {
 
     var body: some View {
         ZStack(alignment: .bottom) {
-            // Прозрачная кнопка на весь виджет — клик открывает плеер.
-            // Саму обложку рисуем ОДИН раз в containerBackground (ниже), а не двумя
-            // слоями: иначе ~150 КБ изображение декодируется дважды на каждый рендер.
+            // Обложка в ТЕЛЕ виджета (а не только в containerBackground) — иначе в
+            // неактивном состоянии рабочего стола система приглушает фон и фото
+            // пропадает. Декодируется один раз (containerBackground — простой цвет).
             Button(intent: OpenYandexMusicIntent()) {
-                Color.clear.frame(maxWidth: .infinity, maxHeight: .infinity)
+                ArtworkFullBleed(data: track.artworkData, solid: s.background == "solid")
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .clipped()
+                    .contentTransition(.opacity)
+                    .id("lg-art-\(track.id)")
             }
             .buttonStyle(.plain)
 
@@ -270,11 +274,7 @@ struct LargeWidgetView: View {
                 )
             )
         }
-        .containerBackground(for: .widget) {
-            ArtworkFullBleed(data: track.artworkData, solid: s.background == "solid")
-                .contentTransition(.opacity)
-                .id("lg-art-\(track.id)")
-        }
+        .containerBackground(for: .widget) { Color.ymDark }
     }
 }
 
