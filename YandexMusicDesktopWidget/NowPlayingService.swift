@@ -110,7 +110,7 @@ final class NowPlayingService: ObservableObject {
     // Обложка высокого разрешения по id трека ЯМ — чтобы в большом виджете не было
     // пикселизации (родная из стрима ~300px, на full-bleed мылит). Храним прямой URL
     // обложки, чтобы при повторной докачке не делать второй /search.
-    private var hdCoverCache: [String: Data] = [:]
+    private var hdCoverCache: [String: (sm: Data, lg: Data)] = [:]   // ~320px и ~700px
     private var hdCoverFetching: Set<String> = []
     private var apiCoverURLMap: [String: URL] = [:]
 
@@ -579,14 +579,19 @@ final class NowPlayingService: ObservableObject {
             lastSignificantPlaying = track.isPlaying
             lastArtworkPresent     = (track.artworkData != nil)
             lastSignificantLike    = track.likeState
-            // ФОТО ВСЕГДА СРАЗУ: если HD уже в кэше — ставим её; иначе показываем
-            // родную обложку (она приходит вместе с названием), а HD плавно дорисуется
-            // через cacheAndApplyHD. Так на всех треках фото+название появляются разом.
+            // ФОТО ВСЕГДА СРАЗУ. Если HD-варианты уже в кэше (трек играл) — пишем их
+            // (виджет покажет нужный размер). Иначе показываем родную обложку, а на
+            // смене трека убираем старые размерные варианты (чтобы не показать чужие);
+            // HD дорисуется через cacheAndApplyHD.
             var widgetTrack = track
-            if let apiId = apiTrackIdMap[apiKey(track)], let hd = hdCoverCache[apiId] {
-                widgetTrack.artworkData = hd
+            if let apiId = apiTrackIdMap[apiKey(track)], let v = hdCoverCache[apiId] {
+                widgetTrack.artworkData = v.lg
+                AppGroupManager.shared.saveTrack(widgetTrack)
+                AppGroupManager.shared.saveHDVariants(small: v.sm, large: v.lg)
+            } else {
+                if idChanged { AppGroupManager.shared.removeHDVariants() }
+                AppGroupManager.shared.saveTrack(widgetTrack)
             }
-            AppGroupManager.shared.saveTrack(widgetTrack)
             AppGroupManager.shared.saveSyncStatus(.synced)
             reloadWidgetForcefully()
             logger.debug("Трек изменился: «\(track.title)» / \(source.rawValue) / играет=\(track.isPlaying)")
@@ -652,53 +657,43 @@ final class NowPlayingService: ObservableObject {
     /// Применяет HD-обложку из кэша; если её нет — докачивает (нужен apiTrack для URL,
     /// поэтому при пустом кэше делаем поиск через highResCover со строгим совпадением).
     private func applyOrFetchHDCover(apiId: String, for track: TrackInfo) {
-        if let data = hdCoverCache[apiId] {
-            guard currentTrack.id == track.id, currentTrack.artworkData != data else { return }
-            currentTrack.artworkData = data
-            AppGroupManager.shared.saveTrack(currentTrack)
-            reloadWidgetDebounced()
+        if let v = hdCoverCache[apiId] {
+            cacheAndApplyHD(sm: v.sm, lg: v.lg, apiId: apiId, for: track)
             return
         }
         guard !hdCoverFetching.contains(apiId) else { return }
-        // Знаем прямой URL обложки — качаем по нему через fetchHDCover (он даунскейлит),
-        // без повторного /search.
+        // Знаем прямой URL обложки — качаем по нему через fetchHDCover, без /search.
         if let url = apiCoverURLMap[apiKey(track)] {
             fetchHDCover(url, apiId: apiId, for: track)
             return
         }
         hdCoverFetching.insert(apiId)
         YandexMusicAPI.shared.highResCover(title: track.title, artist: track.artist, duration: track.duration) { [weak self] data in
-            // Даунскейл на фоне (как в fetchHDCover) — иначе хранили бы полный 1000px.
-            guard let data, !data.isEmpty else {
-                DispatchQueue.main.async { self?.hdCoverFetching.remove(apiId) }
-                return
-            }
-            let scaled = NowPlayingService.downscaledArtwork(data) ?? data
-            DispatchQueue.main.async {
-                guard let self else { return }
-                self.hdCoverFetching.remove(apiId)
-                self.cacheAndApplyHD(scaled, apiId: apiId, for: track)
-            }
+            self?.handleFetchedCover(data, apiId: apiId, for: track)
         }
     }
 
     /// Качает HD-обложку по готовому URL и применяет к текущему треку.
     private func fetchHDCover(_ url: URL, apiId: String, for track: TrackInfo) {
-        if let data = hdCoverCache[apiId] { cacheAndApplyHD(data, apiId: apiId, for: track); return }
+        if let v = hdCoverCache[apiId] { cacheAndApplyHD(sm: v.sm, lg: v.lg, apiId: apiId, for: track); return }
         guard !hdCoverFetching.contains(apiId) else { return }
         hdCoverFetching.insert(apiId)
         YandexMusicAPI.shared.fetchCover(url) { [weak self] data in
-            // Даунскейл делаем на фоне (тяжёлый рендер не на главном потоке).
-            guard let data, !data.isEmpty else {
-                DispatchQueue.main.async { self?.hdCoverFetching.remove(apiId) }
-                return
-            }
-            let scaled = NowPlayingService.downscaledArtwork(data) ?? data
-            DispatchQueue.main.async {
-                guard let self else { return }
-                self.hdCoverFetching.remove(apiId)
-                self.cacheAndApplyHD(scaled, apiId: apiId, for: track)
-            }
+            self?.handleFetchedCover(data, apiId: apiId, for: track)
+        }
+    }
+
+    /// Готовит ДВА размера (≈320px и ≈700px) на фоне и применяет.
+    private func handleFetchedCover(_ data: Data?, apiId: String, for track: TrackInfo) {
+        guard let data, !data.isEmpty else {
+            DispatchQueue.main.async { self.hdCoverFetching.remove(apiId) }
+            return
+        }
+        let lg = NowPlayingService.downscaledArtwork(data, maxDim: 700) ?? data
+        let sm = NowPlayingService.downscaledArtwork(data, maxDim: 320) ?? lg
+        DispatchQueue.main.async {
+            self.hdCoverFetching.remove(apiId)
+            self.cacheAndApplyHD(sm: sm, lg: lg, apiId: apiId, for: track)
         }
     }
 
@@ -722,15 +717,13 @@ final class NowPlayingService: ObservableObject {
         return out as Data
     }
 
-    private func cacheAndApplyHD(_ data: Data, apiId: String, for track: TrackInfo) {
-        hdCoverCache[apiId] = data
-        if hdCoverCache.count > 60 { hdCoverCache.removeAll(); hdCoverCache[apiId] = data }
-        guard currentTrack.id == track.id, currentTrack.artworkData != data else { return }
-        currentTrack.artworkData = data
-        // HD пришла — отменяем фолбэк родной и пишем HD в виджет.
-        widgetAwaitingHDArt = false
-        widgetArtFallbackWork?.cancel(); widgetArtFallbackWork = nil
-        AppGroupManager.shared.saveTrack(currentTrack)
+    private func cacheAndApplyHD(sm: Data, lg: Data, apiId: String, for track: TrackInfo) {
+        hdCoverCache[apiId] = (sm, lg)
+        if hdCoverCache.count > 60 { hdCoverCache.removeAll(); hdCoverCache[apiId] = (sm, lg) }
+        guard currentTrack.id == track.id, currentTrack.artworkData != lg else { return }
+        currentTrack.artworkData = lg
+        AppGroupManager.shared.saveTrack(currentTrack)                       // artwork.dat = large (фолбэк/попап)
+        AppGroupManager.shared.saveHDVariants(small: sm, large: lg)          // размерные варианты для виджета
         reloadWidgetDebounced()
     }
 

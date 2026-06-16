@@ -85,6 +85,26 @@ final class AppGroupManager {
         return track
     }
 
+    // MARK: - Размерные варианты HD-обложки (под размер виджета)
+    // Маленький/средний виджет показывают мелкую обложку — им хватает ~320px (меньше
+    // памяти и нагрузки на расширение). Большому нужен ~700px. Храним два файла; если
+    // нужного нет — отдаём дефолт (родную из artwork.dat).
+    func saveHDVariants(small: Data, large: Data) {
+        if let u = fileURL("artwork_sm.dat") { try? small.write(to: u, options: .atomic) }
+        if let u = fileURL("artwork_lg.dat") { try? large.write(to: u, options: .atomic) }
+    }
+    func removeHDVariants() {
+        if let u = fileURL("artwork_sm.dat") { try? FileManager.default.removeItem(at: u) }
+        if let u = fileURL("artwork_lg.dat") { try? FileManager.default.removeItem(at: u) }
+    }
+    /// Обложка под размер: large → artwork_lg, иначе artwork_sm; фолбэк — artwork.dat.
+    func loadArtwork(large: Bool) -> Data? {
+        let name = large ? "artwork_lg.dat" : "artwork_sm.dat"
+        if let u = fileURL(name), let d = try? Data(contentsOf: u), !d.isEmpty { return d }
+        if let u = fileURL("artwork.dat"), let d = try? Data(contentsOf: u), !d.isEmpty { return d }
+        return nil
+    }
+
     // MARK: - Настройки виджета
 
     func saveWidgetSettings(_ s: WidgetSettings) {

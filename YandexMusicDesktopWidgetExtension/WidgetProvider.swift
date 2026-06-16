@@ -32,8 +32,18 @@ struct WidgetProvider: AppIntentTimelineProvider {
         )
     }
 
+    /// Грузит трек с обложкой ПОД РАЗМЕР виджета (большой — ~700px, иначе ~320px),
+    /// чтобы маленький/средний не декодировали тяжёлую большую картинку.
+    private func loadTrackSized(for family: WidgetFamily) -> TrackInfo {
+        var track = AppGroupManager.shared.loadTrack()
+        if let art = AppGroupManager.shared.loadArtwork(large: family == .systemLarge) {
+            track.artworkData = art
+        }
+        return track
+    }
+
     func snapshot(for configuration: ConfigurationAppIntent, in context: Context) async -> MusicEntry {
-        let track = AppGroupManager.shared.loadTrack()
+        let track = loadTrackSized(for: context.family)
         logger.debug("Снимок виджета: \(track.title)")
         return MusicEntry(date: Date(), track: track, configuration: configuration,
                           settings: AppGroupManager.shared.loadWidgetSettings())
@@ -43,8 +53,8 @@ struct WidgetProvider: AppIntentTimelineProvider {
         AppLang.refresh()   // подхватываем язык из App Group (мог смениться в приложении)
         let now   = Date()
         // Виджет ТОЛЬКО ЧИТАЕТ из App Group — основное приложение (без sandbox)
-        // пишет данные, виджет никогда не перезаписывает их.
-        let track = AppGroupManager.shared.loadTrack()
+        // пишет данные, виджет никогда не перезаписывает их. Обложка — под размер.
+        let track = loadTrackSized(for: context.family)
 
         logger.debug("Timeline: «\(track.title)» — \(track.artist), играет=\(track.isPlaying)")
 
