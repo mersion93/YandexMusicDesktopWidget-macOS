@@ -406,6 +406,30 @@ struct AboutPane: View {
             Text("Виджет «Сейчас играет» для рабочего стола и меню-бара.\nПоддержка Яндекс Музыки, Spotify и Apple Music.")
                 .font(.system(size: 13)).foregroundStyle(.secondary)
                 .multilineTextAlignment(.center).frame(maxWidth: 360).padding(.top, 4)
+
+            VStack(spacing: 3) {
+                Text("Разработчик").font(.system(size: 11)).foregroundStyle(.secondary)
+                Text("Alexandr Bykhanov").font(.system(size: 14, weight: .semibold))
+            }
+            .padding(.top, 10)
+
+            Button {
+                if let url = URL(string: "https://github.com/czkv6vsmz2-web") {
+                    NSWorkspace.shared.open(url)
+                }
+            } label: {
+                HStack(spacing: 7) {
+                    Image(systemName: "chevron.left.forwardslash.chevron.right")
+                        .font(.system(size: 13, weight: .semibold))
+                    Text("GitHub").font(.system(size: 13, weight: .semibold))
+                }
+                .padding(.horizontal, 16).padding(.vertical, 8)
+            }
+            .buttonStyle(.borderedProminent)
+            .tint(Color.ymYellow)
+            .foregroundStyle(.black)
+            .padding(.top, 6)
+
             Spacer()
         }
         .frame(maxWidth: .infinity)
