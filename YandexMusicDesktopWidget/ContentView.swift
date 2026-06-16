@@ -156,7 +156,9 @@ struct ContentView: View {
                     .foregroundStyle(.primary)
                     .lineLimit(1)
                     .contentTransition(.opacity)
-                Text(service.currentTrack.artist)
+                // Пробел вместо пустой строки — резервируем высоту, чтобы попап не
+                // «прыгал», пока исполнитель скрыт маской и потом появляется.
+                Text(service.currentTrack.artist.isEmpty ? " " : service.currentTrack.artist)
                     .font(.system(size: 14, design: .rounded))
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
@@ -368,7 +370,7 @@ struct ContentView: View {
                         .foregroundStyle(.primary)
                         .lineLimit(1)
                         .contentTransition(.opacity)
-                    Text(service.currentTrack.artist)
+                    Text(service.currentTrack.artist.isEmpty ? " " : service.currentTrack.artist)
                         .font(.system(size: 11, design: .rounded))
                         .foregroundStyle(.secondary)
                         .lineLimit(1)

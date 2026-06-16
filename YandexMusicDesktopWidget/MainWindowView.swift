@@ -98,7 +98,7 @@ struct NowPlayingPane: View {
 
             VStack(spacing: 4) {
                 Text(track.title).font(.system(size: 20, weight: .bold)).lineLimit(1)
-                Text(track.artist).font(.system(size: 14)).foregroundStyle(.secondary).lineLimit(1)
+                Text(track.artist.isEmpty ? " " : track.artist).font(.system(size: 14)).foregroundStyle(.secondary).lineLimit(1)
                 Text(playerName).font(.system(size: 11, weight: .medium))
                     .foregroundStyle(Color.ymYellow).padding(.top, 2)
             }
