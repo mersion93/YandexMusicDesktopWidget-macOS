@@ -34,10 +34,10 @@ enum Constants {
 
         static func name(for bundleID: String) -> String {
             switch bundleID {
-            case yandex:  return "Яндекс Музыка"
+            case yandex:  return tr("Яндекс Музыка", "Yandex Music")
             case spotify: return "Spotify"
             case apple:   return "Apple Music"
-            default:      return "Музыка"
+            default:      return tr("Музыка", "Music")
             }
         }
     }

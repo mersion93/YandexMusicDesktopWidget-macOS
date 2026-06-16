@@ -40,6 +40,7 @@ struct WidgetProvider: AppIntentTimelineProvider {
     }
 
     func timeline(for configuration: ConfigurationAppIntent, in context: Context) async -> Timeline<MusicEntry> {
+        AppLang.refresh()   // подхватываем язык из App Group (мог смениться в приложении)
         let now   = Date()
         // Виджет ТОЛЬКО ЧИТАЕТ из App Group — основное приложение (без sandbox)
         // пишет данные, виджет никогда не перезаписывает их.

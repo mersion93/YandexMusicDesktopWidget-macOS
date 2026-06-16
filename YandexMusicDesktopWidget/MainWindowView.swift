@@ -10,6 +10,7 @@ private extension Color {
 
 struct MainWindowView: View {
     @StateObject private var service = NowPlayingService.shared
+    @AppStorage(AppLang.key) private var appLanguage = "auto"   // перерисовка при смене языка
     @State private var section: Section = .nowPlaying
     @AppStorage("hasSeenOnboarding") private var hasSeenOnboarding = false
     @State private var showOnboarding = false
@@ -19,10 +20,10 @@ struct MainWindowView: View {
         var id: String { rawValue }
         var title: String {
             switch self {
-            case .nowPlaying: return "Сейчас играет"
-            case .players:    return "Плееры"
-            case .settings:   return "Настройки"
-            case .about:      return "О программе"
+            case .nowPlaying: return tr("Сейчас играет", "Now Playing")
+            case .players:    return tr("Плееры", "Players")
+            case .settings:   return tr("Настройки", "Settings")
+            case .about:      return tr("О программе", "About")
             }
         }
         var icon: String {
@@ -152,7 +153,7 @@ struct NowPlayingPane: View {
             seedElapsed(); loadHiResArt()
             NowPlayingStreamer.shared.pollNow()   // свежая позиция при открытии окна
         }
-        .navigationTitle("Сейчас играет")
+        .navigationTitle(tr("Сейчас играет", "Now Playing"))
     }
 
     @ViewBuilder private var artworkContent: some View {
@@ -169,7 +170,7 @@ struct NowPlayingPane: View {
 
     private var playerName: String {
         let b = track.playerBundleID
-        return b.isEmpty ? "Яндекс Музыка" : Constants.Players.name(for: b)
+        return b.isEmpty ? tr("Яндекс Музыка", "Yandex Music") : Constants.Players.name(for: b)
     }
 
     /// Для ЯМ (если выполнен вход) подтягивает обложку 1000×1000 из API для большого окна.
@@ -207,16 +208,16 @@ struct NowPlayingPane: View {
 struct PlayersPane: View {
     @StateObject private var service = NowPlayingService.shared
     private let players: [(id: String, name: String, icon: String)] = [
-        (Constants.Players.yandex,  "Яндекс Музыка", "music.note"),
+        (Constants.Players.yandex,  tr("Яндекс Музыка", "Yandex Music"), "music.note"),
         (Constants.Players.spotify, "Spotify",       "music.note.list"),
         (Constants.Players.apple,   "Apple Music",   "music.note")
     ]
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            Text("Поддерживаемые плееры")
+            Text(tr("Поддерживаемые плееры", "Supported players"))
                 .font(.system(size: 18, weight: .bold)).padding(.bottom, 4)
-            Text("Виджет автоматически показывает тот плеер, который сейчас играет в системе.")
+            Text(tr("Виджет автоматически показывает тот плеер, который сейчас играет в системе.", "The widget automatically shows whichever player is currently playing."))
                 .font(.system(size: 12)).foregroundStyle(.secondary).padding(.bottom, 18)
 
             ForEach(players, id: \.id) { p in
@@ -226,12 +227,12 @@ struct PlayersPane: View {
                         .foregroundStyle(active ? Color.ymYellow : .secondary).frame(width: 28)
                     VStack(alignment: .leading, spacing: 2) {
                         Text(p.name).font(.system(size: 14, weight: .medium))
-                        Text(p.id == Constants.Players.yandex ? "Полная поддержка (лайки, обложки)" : "Воспроизведение, обложка, прогресс")
+                        Text(p.id == Constants.Players.yandex ? tr("Полная поддержка (лайки, обложки)", "Full support (likes, artwork)") : tr("Воспроизведение, обложка, прогресс", "Playback, artwork, progress"))
                             .font(.system(size: 11)).foregroundStyle(.secondary)
                     }
                     Spacer()
                     if active {
-                        Text("Играет").font(.system(size: 11, weight: .semibold))
+                        Text(tr("Играет", "Playing")).font(.system(size: 11, weight: .semibold))
                             .foregroundStyle(Color.ymYellow)
                             .padding(.horizontal, 8).padding(.vertical, 3)
                             .background(Color.ymYellow.opacity(0.12)).clipShape(Capsule())
@@ -244,7 +245,7 @@ struct PlayersPane: View {
         }
         .padding(28)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .navigationTitle("Плееры")
+        .navigationTitle(tr("Плееры", "Players"))
     }
 }
 
@@ -256,46 +257,47 @@ struct SettingsPane: View {
     @State private var axGranted = YMTrackReader.isAccessibilityGranted
     @State private var launchAtLogin = (SMAppService.mainApp.status == .enabled)
     @AppStorage("popup_style") private var popupStyle = "compact"
+    @AppStorage(AppLang.key) private var appLanguage = "auto"
     private let ticker = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
 
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 22) {
-                group("Аккаунт Яндекс Музыки") {
+                group(tr("Аккаунт Яндекс Музыки", "Yandex Music account")) {
                     HStack {
                         VStack(alignment: .leading, spacing: 2) {
-                            Text(ymAuthorized ? "Вход выполнен" : "Вход не выполнен").font(.system(size: 13))
-                            Text("Настоящие обложки и избранное").font(.system(size: 11)).foregroundStyle(.secondary)
+                            Text(ymAuthorized ? tr("Вход выполнен", "Signed in") : tr("Вход не выполнен", "Not signed in")).font(.system(size: 13))
+                            Text(tr("Настоящие обложки и избранное", "Real artwork and favorites")).font(.system(size: 11)).foregroundStyle(.secondary)
                         }
                         Spacer()
                         if ymAuthorized {
-                            Button("Выйти") { YandexMusicAPI.shared.logout(); ymAuthorized = false }
+                            Button(tr("Выйти", "Sign out")) { YandexMusicAPI.shared.logout(); ymAuthorized = false }
                         } else {
-                            Button("Войти") { loginYandex() }.tint(Color.ymYellow)
+                            Button(tr("Войти", "Sign in")) { loginYandex() }.tint(Color.ymYellow)
                         }
                     }
                 }
 
-                group("Разрешения") {
+                group(tr("Разрешения", "Permissions")) {
                     HStack {
                         VStack(alignment: .leading, spacing: 2) {
                             Text("Accessibility").font(.system(size: 13))
-                            Text("Лайк/дизлайк и запасное чтение трека").font(.system(size: 11)).foregroundStyle(.secondary)
+                            Text(tr("Лайк/дизлайк и запасное чтение трека", "Likes/dislikes and fallback track reading")).font(.system(size: 11)).foregroundStyle(.secondary)
                         }
                         Spacer()
                         if axGranted {
                             Image(systemName: "checkmark.circle.fill").foregroundStyle(.green)
                         } else {
-                            Button("Разрешить") { YMTrackReader.requestAccessibilityPermission() }.tint(Color.ymYellow)
+                            Button(tr("Разрешить", "Grant")) { YMTrackReader.requestAccessibilityPermission() }.tint(Color.ymYellow)
                         }
                     }
                 }
 
-                group("Общее") {
+                group(tr("Общее", "General")) {
                     HStack {
                         VStack(alignment: .leading, spacing: 2) {
-                            Text("Запускать при входе").font(.system(size: 13))
-                            Text("Открывать приложение при включении Mac").font(.system(size: 11)).foregroundStyle(.secondary)
+                            Text(tr("Запускать при входе", "Launch at login")).font(.system(size: 13))
+                            Text(tr("Открывать приложение при включении Mac", "Open the app when the Mac starts")).font(.system(size: 11)).foregroundStyle(.secondary)
                         }
                         Spacer()
                         Toggle("", isOn: $launchAtLogin)
@@ -308,23 +310,38 @@ struct SettingsPane: View {
                     }
                 }
 
-                group("Стиль попапа в меню-баре") {
+                group(tr("Язык", "Language")) {
+                    Picker("", selection: $appLanguage) {
+                        Text(tr("Системный", "System")).tag("auto")
+                        Text("Русский").tag("ru")
+                        Text("English").tag("en")
+                    }
+                    .pickerStyle(.segmented)
+                    .labelsHidden()
+                    .onChange(of: appLanguage) { lang in
+                        AppGroupManager.shared.saveLanguage(lang)   // чтобы виджет тоже знал
+                        AppLang.refresh()
+                        WidgetCenter.shared.reloadAllTimelines()
+                    }
+                }
+
+                group(tr("Стиль попапа в меню-баре", "Menu bar popup style")) {
                     HStack(spacing: 16) {
-                        styleOption(title: "Компактный", value: "compact") { CompactMock(art: service.currentTrack.artworkData) }
-                        styleOption(title: "Карточка", value: "card") { CardMock(art: service.currentTrack.artworkData) }
+                        styleOption(title: tr("Компактный", "Compact"), value: "compact") { CompactMock(art: service.currentTrack.artworkData) }
+                        styleOption(title: tr("Карточка", "Card"), value: "card") { CardMock(art: service.currentTrack.artworkData) }
                         Spacer()
                     }
-                    Text("Применяется при следующем открытии попапа.")
+                    Text(tr("Применяется при следующем открытии попапа.", "Applies the next time you open the popup."))
                         .font(.system(size: 11)).foregroundStyle(.secondary)
                 }
 
-                group("Оформление виджета") {
+                group(tr("Оформление виджета", "Widget appearance")) {
                     HStack(alignment: .top, spacing: 10) {
                         Image(systemName: "paintbrush").foregroundStyle(Color.ymYellow).font(.system(size: 14))
                         VStack(alignment: .leading, spacing: 3) {
-                            Text("Цвет, фон и элементы настраиваются для каждого виджета отдельно")
+                            Text(tr("Цвет, фон и элементы настраиваются для каждого виджета отдельно", "Color, background and elements are configured per widget"))
                                 .font(.system(size: 13))
-                            Text("Правый клик по виджету на рабочем столе → «Редактировать виджет»")
+                            Text(tr("Правый клик по виджету на рабочем столе → «Редактировать виджет»", "Right-click the widget on the desktop → “Edit Widget”"))
                                 .font(.system(size: 11)).foregroundStyle(.secondary)
                         }
                         Spacer()
@@ -333,7 +350,7 @@ struct SettingsPane: View {
             }
             .padding(28)
         }
-        .navigationTitle("Настройки")
+        .navigationTitle(tr("Настройки", "Settings"))
         .onReceive(ticker) { _ in
             // Пишем в @State только при РЕАЛЬНОМ изменении — иначе каждую секунду
             // перерисовывается вся панель и заново декодируются превью-обложки.
@@ -393,7 +410,7 @@ struct SettingsPane: View {
 struct AboutPane: View {
     private var version: String {
         let v = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0"
-        return "Версия \(v)"
+        return tr("Версия \(v)", "Version \(v)")
     }
     var body: some View {
         VStack(spacing: 14) {
@@ -403,12 +420,13 @@ struct AboutPane: View {
                 .background(Color.ymYellow.opacity(0.1)).clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
             Text("Music Widget").font(.system(size: 22, weight: .bold))
             Text(version).font(.system(size: 12)).foregroundStyle(.secondary)
-            Text("Виджет «Сейчас играет» для рабочего стола и меню-бара.\nПоддержка Яндекс Музыки, Spotify и Apple Music.")
+            Text(tr("Виджет «Сейчас играет» для рабочего стола и меню-бара.\nПоддержка Яндекс Музыки, Spotify и Apple Music.",
+                    "A “Now Playing” widget for your desktop and menu bar.\nSupports Yandex Music, Spotify and Apple Music."))
                 .font(.system(size: 13)).foregroundStyle(.secondary)
                 .multilineTextAlignment(.center).frame(maxWidth: 360).padding(.top, 4)
 
             VStack(spacing: 3) {
-                Text("Разработчик").font(.system(size: 11)).foregroundStyle(.secondary)
+                Text(tr("Разработчик", "Developer")).font(.system(size: 11)).foregroundStyle(.secondary)
                 Text("Alexandr Bykhanov").font(.system(size: 14, weight: .semibold))
             }
             .padding(.top, 10)
@@ -434,7 +452,7 @@ struct AboutPane: View {
         }
         .frame(maxWidth: .infinity)
         .padding(40)
-        .navigationTitle("О программе")
+        .navigationTitle(tr("О программе", "About"))
     }
 }
 
@@ -450,26 +468,26 @@ struct OnboardingView: View {
         VStack(spacing: 18) {
             Image(systemName: "music.note")
                 .font(.system(size: 44, weight: .bold)).foregroundStyle(Color.ymYellow)
-            Text("Добро пожаловать").font(.system(size: 22, weight: .bold))
-            Text("Виджет покажет, что играет в Яндекс Музыке, Spotify или Apple Music.")
+            Text(tr("Добро пожаловать", "Welcome")).font(.system(size: 22, weight: .bold))
+            Text(tr("Виджет покажет, что играет в Яндекс Музыке, Spotify или Apple Music.", "The widget shows what’s playing in Yandex Music, Spotify or Apple Music."))
                 .font(.system(size: 13)).foregroundStyle(.secondary)
                 .multilineTextAlignment(.center).frame(maxWidth: 380)
 
             VStack(spacing: 12) {
-                step("1", "Войдите в Яндекс", "Для обложек и избранного", done: ymAuthorized) {
+                step("1", tr("Войдите в Яндекс", "Sign in to Yandex"), tr("Для обложек и избранного", "For artwork and favorites"), done: ymAuthorized) {
                     YandexAuthController.shared.present { t in
                         guard let t else { return }
                         YandexMusicAPI.shared.applyToken(t) { ok in ymAuthorized = ok }
                     }
                 }
-                step("2", "Дайте Accessibility", "Для лайков (опционально)", done: axGranted) {
+                step("2", tr("Дайте Accessibility", "Grant Accessibility"), tr("Для лайков (опционально)", "For likes (optional)"), done: axGranted) {
                     YMTrackReader.requestAccessibilityPermission()
                 }
-                step("3", "Добавьте виджет", "ПКМ по столу → «Изменить виджеты»", done: false, action: nil)
+                step("3", tr("Добавьте виджет", "Add the widget"), tr("ПКМ по столу → «Изменить виджеты»", "Right-click desktop → “Edit Widgets”"), done: false, action: nil)
             }
             .frame(maxWidth: 420)
 
-            Button("Начать") { onDone() }
+            Button(tr("Начать", "Get Started")) { onDone() }
                 .buttonStyle(.borderedProminent).controlSize(.large).tint(Color.ymYellow)
                 .padding(.top, 6)
         }
@@ -494,7 +512,7 @@ struct OnboardingView: View {
             }
             Spacer()
             if let action, !done {
-                Button("Сделать", action: action).controlSize(.small)
+                Button(tr("Сделать", "Open"), action: action).controlSize(.small)
             }
         }
         .padding(12)

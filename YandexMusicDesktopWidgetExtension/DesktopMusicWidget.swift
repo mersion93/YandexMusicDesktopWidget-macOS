@@ -52,11 +52,11 @@ struct EmptyStateView: View {
                 .font(.system(size: family == .systemSmall ? 26 : 34, weight: .semibold))
                 .foregroundStyle(accent.opacity(0.9))
             VStack(spacing: 3) {
-                Text("Ничего не играет")
+                Text(tr("Ничего не играет", "Nothing is playing"))
                     .font(.system(size: family == .systemSmall ? 12 : 14, weight: .semibold, design: .rounded))
                     .foregroundStyle(.white.opacity(0.85))
                 if family != .systemSmall {
-                    Text("Включите трек в плеере")
+                    Text(tr("Включите трек в плеере", "Start a track in your player"))
                         .font(.system(size: 11, design: .rounded))
                         .foregroundStyle(.white.opacity(0.5))
                 }
@@ -417,12 +417,12 @@ struct StatusPill: View {
         HStack(spacing: 5) {
             if isPlaying {
                 MiniWave(color: accent)
-                Text("Играет")
+                Text(tr("Играет", "Playing"))
                     .font(.system(size: 10, weight: .semibold, design: .rounded))
                     .foregroundStyle(accent)
             } else {
                 Circle().fill(Color.ymDim).frame(width: 5, height: 5)
-                Text("Пауза")
+                Text(tr("Пауза", "Paused"))
                     .font(.system(size: 10, weight: .medium, design: .rounded))
                     .foregroundStyle(.white.opacity(0.6))
             }
@@ -485,7 +485,7 @@ struct YMPlaceholder: View {
                 Text("Я")
                     .font(.system(size: 52, weight: .black))
                     .foregroundStyle(Color.ymYellow)
-                Text("Музыка")
+                Text(tr("Музыка", "Music"))
                     .font(.system(size: 11, weight: .medium))
                     .foregroundStyle(Color.white.opacity(0.38))
                     .tracking(2.5)

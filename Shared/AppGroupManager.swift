@@ -99,6 +99,11 @@ final class AppGroupManager {
         return s
     }
 
+    // MARK: - Язык интерфейса (общий для приложения и виджета)
+
+    func saveLanguage(_ lang: String) { writeString(lang, to: "language") }
+    func loadLanguage() -> String { readString("language") ?? "auto" }
+
     // MARK: - Last command
 
     func saveLastCommand(_ command: PlaybackCommand) {

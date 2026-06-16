@@ -74,6 +74,7 @@ struct ContentView: View {
 
     /// Стиль попапа: "compact" (горизонтальный) или "card" (крупная карточка).
     @AppStorage("popup_style") private var popupStyle = "compact"
+    @AppStorage(AppLang.key) private var appLanguage = "auto"   // перерисовка при смене языка
 
     private let ticker = Timer.publish(every: 0.5, on: .main, in: .common).autoconnect()
 
@@ -144,7 +145,7 @@ struct ContentView: View {
                 }
             }
             .onTapGesture { openYandexMusic() }
-            .help("Открыть Яндекс Музыку")
+            .help(tr("Открыть Яндекс Музыку", "Open Yandex Music"))
             .padding(.top, 22)
             .padding(.horizontal, 24)
 
@@ -307,7 +308,7 @@ struct ContentView: View {
 
     private var playerName: String {
         let bid = service.currentTrack.playerBundleID
-        return bid.isEmpty ? "Яндекс Музыка" : Constants.Players.name(for: bid)
+        return bid.isEmpty ? tr("Яндекс Музыка", "Yandex Music") : Constants.Players.name(for: bid)
     }
 
     // MARK: - Header
@@ -325,14 +326,14 @@ struct ContentView: View {
             HStack(spacing: 5) {
                 if service.currentTrack.isPlaying {
                     EqualizerBars(color: Color.ymYellow)
-                    Text("Играет")
+                    Text(tr("Играет", "Playing"))
                         .font(.system(size: 10, weight: .semibold))
                         .foregroundStyle(Color.ymYellow)
                 } else {
                     Circle()
                         .fill(Color.secondary.opacity(0.4))
                         .frame(width: 6, height: 6)
-                    Text("Пауза")
+                    Text(tr("Пауза", "Paused"))
                         .font(.system(size: 10))
                         .foregroundStyle(.secondary)
                 }
@@ -354,7 +355,7 @@ struct ContentView: View {
                     .transition(.opacity)
                     .animation(.easeInOut(duration: 0.35), value: artworkIdentifier)
                     .onTapGesture { openYandexMusic() }
-                    .help("Открыть Яндекс Музыку")
+                    .help(tr("Открыть Яндекс Музыку", "Open Yandex Music"))
 
                 // Название / исполнитель со слайдом при смене трека
                 VStack(alignment: .leading, spacing: 4) {
@@ -500,7 +501,7 @@ struct ContentView: View {
         }
         .buttonStyle(.plain)
         .disabled(!axGranted)
-        .help("Нравится")
+        .help(tr("Нравится", "Like"))
     }
 
     private var dislikeButton: some View {
@@ -516,7 +517,7 @@ struct ContentView: View {
         }
         .buttonStyle(.plain)
         .disabled(!axGranted)
-        .help("Не нравится")
+        .help(tr("Не нравится", "Dislike"))
     }
 
     // MARK: - Прогресс
@@ -585,11 +586,11 @@ struct ContentView: View {
             Image(systemName: "person.crop.circle.badge.plus")
                 .foregroundStyle(Color.ymYellow)
                 .font(.system(size: 13))
-            Text("Войдите в Яндекс — для избранного")
+            Text(tr("Войдите в Яндекс — для избранного", "Sign in to Yandex — for favorites"))
                 .font(.system(size: 11))
                 .foregroundStyle(.secondary)
             Spacer()
-            Button("Войти") { loginYandex() }
+            Button(tr("Войти", "Sign in")) { loginYandex() }
                 .buttonStyle(.bordered)
                 .controlSize(.small)
                 .tint(Color.ymYellow)
@@ -606,7 +607,7 @@ struct ContentView: View {
             HStack(spacing: 7) {
                 Image(systemName: "music.note.house.fill")
                     .font(.system(size: 15, weight: .semibold))
-                Text("Открыть Яндекс Музыку")
+                Text(tr("Открыть Яндекс Музыку", "Open Yandex Music"))
                     .font(.system(size: 13, weight: .semibold))
                 Spacer()
                 Image(systemName: "arrow.up.right")
@@ -637,7 +638,7 @@ struct ContentView: View {
                     .foregroundStyle(.secondary)
             }
             .buttonStyle(.plain)
-            .help("Открыть приложение и настройки")
+            .help(tr("Открыть приложение и настройки", "Open app and settings"))
 
             Button(action: { NSApp.terminate(nil) }) {
                 Image(systemName: "power")
@@ -645,7 +646,7 @@ struct ContentView: View {
                     .foregroundStyle(.secondary)
             }
             .buttonStyle(.plain)
-            .help("Завершить приложение")
+            .help(tr("Завершить приложение", "Quit app"))
             .padding(.leading, 10)
         }
         .padding(.horizontal, 16)
