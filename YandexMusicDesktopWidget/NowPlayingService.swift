@@ -412,6 +412,32 @@ final class NowPlayingService: ObservableObject {
     private var pendingNativeTrack: TrackInfo?
     private var nativeApplyWork: DispatchWorkItem?
 
+    // Маска исполнителя: пока источник не прислал настоящего исполнителя нового
+    // трека, прячем поле. stale — исполнитель прошлого трека (его не показываем).
+    private var pendingArtist: (title: String, stale: String)?
+    private var artistRevealWork: DispatchWorkItem?
+
+    /// Если настоящий исполнитель так и не пришёл за 0.8с — значит он ТОТ ЖЕ, что был
+    /// (трек того же артиста). Показываем его и снимаем маску.
+    private func scheduleArtistReveal(stale: String, forTitle title: String) {
+        artistRevealWork?.cancel()
+        let work = DispatchWorkItem { [weak self] in
+            guard let self, let pa = self.pendingArtist,
+                  pa.title == title, self.currentTrack.title == title else { return }
+            self.pendingArtist = nil
+            var t = self.currentTrack
+            t.artist = stale
+            t.id = "\(t.title)-\(t.artist)"
+            self.currentTrack = t
+            self.lastSignificantArtist = t.artist
+            AppGroupManager.shared.saveTrack(t)
+            self.reloadWidgetDebounced()
+            self.enrichTrack(t)   // теперь artist есть — можно искать HD/лайк
+        }
+        artistRevealWork = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.8, execute: work)
+    }
+
     private func applyNativeTrack(_ track: TrackInfo) {
         hasStreamData = true
         // Тот же трек (позиция/пауза/обновление обложки) — применяем СРАЗУ, чтобы
@@ -420,22 +446,18 @@ final class NowPlayingService: ObservableObject {
             applyTrack(track, source: .mediaRemote)
             return
         }
-        // СМЕНА трека: склейка частичных событий. Адаптер шлёт название на ~0.3-0.5с
-        // РАНЬШЕ исполнителя. Если у нового трека название сменилось, а исполнитель
-        // ВСЁ ЕЩЁ как у старого — это недособранное событие: ждём дольше, пока придёт
-        // настоящий исполнитель (он отменит таймер и применится за 70мс). Если новый
-        // исполнитель уже пришёл — короткая склейка.
+        // СМЕНА трека: лёгкая склейка пачки (70мс) — БЕЗ долгого ожидания, чтобы
+        // название+обложка появлялись быстро. За «старого исполнителя на новом треке»
+        // отвечает маска исполнителя в applyTrack (прячем, пока не придёт настоящий).
         pendingNativeTrack = track
         nativeApplyWork?.cancel()
-        let looksIncomplete = (track.title != currentTrack.title) && (track.artist == currentTrack.artist)
-        let delay = looksIncomplete ? 0.6 : 0.07
         let work = DispatchWorkItem { [weak self] in
             guard let self, let t = self.pendingNativeTrack else { return }
             self.pendingNativeTrack = nil
             self.applyTrack(t, source: .mediaRemote)
         }
         nativeApplyWork = work
-        DispatchQueue.main.asyncAfter(deadline: .now() + delay, execute: work)
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.07, execute: work)
     }
 
     private func applyTrack(_ rawTrack: TrackInfo, source: TrackReadSource) {
@@ -465,16 +487,36 @@ final class NowPlayingService: ObservableObject {
 
         // Обложку/артиста НЕ подставляем из внешних кэшей — только родные из системного стрима.
 
+        let oldTitle  = currentTrack.title
+        let oldArtist = currentTrack.artist
+        // МАСКА ИСПОЛНИТЕЛЯ: источник отдаёт исполнителя на ~0.5с позже названия.
+        // Чтобы не показывать СТАРОГО исполнителя на новом треке — прячем поле (пусто),
+        // пока не придёт настоящий. Настоящий = первый непустой и НЕ равный старому
+        // (либо раскрываем старого по таймеру — значит исполнитель тот же).
+        if track.title != oldTitle {
+            if !track.artist.isEmpty, track.artist != oldArtist {
+                pendingArtist = nil; artistRevealWork?.cancel()
+            } else {
+                pendingArtist = (title: track.title, stale: oldArtist)
+                track.artist = ""
+                scheduleArtistReveal(stale: oldArtist, forTitle: track.title)
+            }
+        } else if let pa = pendingArtist, pa.title == track.title {
+            if !track.artist.isEmpty, track.artist != pa.stale {
+                pendingArtist = nil; artistRevealWork?.cancel()   // пришёл настоящий
+            } else {
+                track.artist = ""                                  // держим пусто
+            }
+        }
+        track.id = "\(track.title)-\(track.artist)"   // id с учётом маски (стабилен)
+
         let idChanged = track.id != currentTrack.id
-        // Сохраняем статус лайка из API между событиями одного трека: makeTrack про
-        // лайк не знает (.none), и перезапись стёрла бы реальный статус — это давало
-        // мелькание сердечка и лишние записи track.json на каждое событие позиции.
-        if !idChanged, likeOverrides[track.id] == nil {
+        // Лайк и обложку держим между событиями ТОГО ЖЕ трека (по названию — чтобы
+        // переживать раскрытие исполнителя), но НЕ переносим на новый трек.
+        if track.title == oldTitle, likeOverrides[track.id] == nil {
             track.likeState = currentTrack.likeState
         }
-        // Держим обложку между событиями ТОГО ЖЕ трека (она иногда приходит позже),
-        // но НЕ переносим её на НОВЫЙ трек — иначе на миг видно чужую/прошлую картинку.
-        if !idChanged, (track.artworkData?.isEmpty ?? true), let prevArt = currentTrack.artworkData, !prevArt.isEmpty {
+        if track.title == oldTitle, (track.artworkData?.isEmpty ?? true), let prevArt = currentTrack.artworkData, !prevArt.isEmpty {
             track.artworkData = prevArt
         }
         if idChanged {
@@ -506,13 +548,13 @@ final class NowPlayingService: ObservableObject {
             lastSignificantLike    = track.likeState
             AppGroupManager.shared.saveTrack(track)
             AppGroupManager.shared.saveSyncStatus(.synced)
-            if idChanged {
-                // СМЕНА трека: ждём HD-обложку и перезагружаем виджет ОДИН раз уже с ней
-                // (или родной по таймауту). Иначе виджет дёргался дважды: родная → HD —
-                // это и читалось как «задумчиво». HD из кэша применится сразу.
+            if idChanged && pendingArtist == nil {
+                // СМЕНА трека с полными данными: ждём HD-обложку и перезагружаем ОДИН
+                // раз уже с ней (или родной по таймауту). HD из кэша применится сразу.
                 scheduleNewTrackWidgetReload()
             } else {
-                // Пауза/лайк того же трека — мгновенная перезагрузка.
+                // Исполнитель ещё скрыт (показываем название+родную обложку СРАЗУ),
+                // либо пауза/лайк/раскрытие исполнителя — мгновенная перезагрузка.
                 reloadWidgetForcefully()
             }
             logger.debug("Трек изменился: «\(track.title)» / \(source.rawValue) / играет=\(track.isPlaying)")
@@ -525,6 +567,8 @@ final class NowPlayingService: ObservableObject {
     /// Обложку берём исключительно из системного стрима (она родная и всегда верная) —
     /// внешний поиск обложки по названию отключён, т.к. находил ЧУЖИЕ картинки.
     private func enrichTrack(_ track: TrackInfo) {
+        // Пока исполнитель скрыт — НЕ ищем в API (пустой artist дал бы мусорный поиск).
+        guard pendingArtist == nil else { return }
         guard track.title != Constants.Media.fallbackTitle,
               track.title != Constants.Media.notRunningTitle else { return }
         // Статус лайка — только для Яндекс Музыки (для Spotify/Apple Music это чужой каталог).
