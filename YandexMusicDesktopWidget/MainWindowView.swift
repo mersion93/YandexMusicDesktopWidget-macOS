@@ -434,7 +434,7 @@ struct AboutPane: View {
             .padding(.top, 10)
 
             Button {
-                if let url = URL(string: "https://github.com/czkv6vsmz2-web") {
+                if let url = URL(string: "https://github.com/mersion93/YandexMusicDesktopWidget-macOS") {
                     NSWorkspace.shared.open(url)
                 }
             } label: {
