@@ -8,7 +8,6 @@
 
 > <p align="center">
   <img src="docs/screenshot2.png" width="560" alt="Скриншот">
-  <img src="docs/screenshot1.png" width="560" alt="Скриншот">
   <img src="docs/screenshot3.png" width="560" alt="Скриншот">
 </p>
 
