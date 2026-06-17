@@ -42,45 +42,27 @@ final class AppGroupManager {
 
     // MARK: - Track
 
-    // Обложку держим ОТДЕЛЬНЫМ файлом, а не внутри track.json. Тогда метаданные
-    // (название/пауза/лайк) — это крошечный JSON, который пишется часто и дёшево,
-    // а тяжёлая обложка (~70–150 КБ) переписывается ТОЛЬКО когда реально меняется.
-    private var lastArtwork: Data?
-
+    // Обложку держим ВНУТРИ track.json — одна атомарная запись, поэтому название и
+    // обложка ВСЕГДА согласованы (виджет не поймает «новое название + старое фото»).
+    // Пишется только при значимом изменении (не на каждый тик), так что вес ОК.
     func saveTrack(_ track: TrackInfo) {
         guard let url = fileURL("track.json") else {
             logger.error("Контейнер недоступен — трек не сохранён")
             return
         }
-        var meta = track
-        let art = track.artworkData
-        meta.artworkData = nil   // обложка — отдельным файлом
         do {
-            let data = try JSONEncoder().encode(meta)
+            let data = try JSONEncoder().encode(track)
             try data.write(to: url, options: .atomic)
         } catch {
             logger.error("Ошибка сохранения трека: \(error.localizedDescription)")
-        }
-        // Обложка: пишем при изменении. На nil УДАЛЯЕМ — чтобы новый трек с ещё не
-        // подгрузившейся обложкой показывал нейтральный плейсхолдер, а НЕ обложку
-        // прошлого трека. (Склейка событий в NowPlayingService обычно успевает
-        // принести обложку вместе с названием, так что плейсхолдер — редкий случай.)
-        if let artURL = fileURL("artwork.dat"), art != lastArtwork {
-            lastArtwork = art
-            if let art, !art.isEmpty { try? art.write(to: artURL, options: .atomic) }
-            else { try? FileManager.default.removeItem(at: artURL) }
         }
     }
 
     func loadTrack() -> TrackInfo {
         guard let url = fileURL("track.json"),
               let data = try? Data(contentsOf: url),
-              var track = try? JSONDecoder().decode(TrackInfo.self, from: data) else {
+              let track = try? JSONDecoder().decode(TrackInfo.self, from: data) else {
             return TrackInfo.notRunning
-        }
-        // Подцепляем обложку из отдельного файла.
-        if let artURL = fileURL("artwork.dat"), let art = try? Data(contentsOf: artURL), !art.isEmpty {
-            track.artworkData = art
         }
         return track
     }
@@ -107,25 +89,6 @@ final class AppGroupManager {
         if let d = try? JSONEncoder().encode(t) { try? d.write(to: url, options: .atomic) }
     }
 
-    // MARK: - Размерные варианты HD-обложки (под размер виджета)
-    // Маленький/средний виджет показывают мелкую обложку — им хватает ~320px (меньше
-    // памяти и нагрузки на расширение). Большому нужен ~700px. Храним два файла; если
-    // нужного нет — отдаём дефолт (родную из artwork.dat).
-    func saveHDVariants(small: Data, large: Data) {
-        if let u = fileURL("artwork_sm.dat") { try? small.write(to: u, options: .atomic) }
-        if let u = fileURL("artwork_lg.dat") { try? large.write(to: u, options: .atomic) }
-    }
-    func removeHDVariants() {
-        if let u = fileURL("artwork_sm.dat") { try? FileManager.default.removeItem(at: u) }
-        if let u = fileURL("artwork_lg.dat") { try? FileManager.default.removeItem(at: u) }
-    }
-    /// Обложка под размер: large → artwork_lg, иначе artwork_sm; фолбэк — artwork.dat.
-    func loadArtwork(large: Bool) -> Data? {
-        let name = large ? "artwork_lg.dat" : "artwork_sm.dat"
-        if let u = fileURL(name), let d = try? Data(contentsOf: u), !d.isEmpty { return d }
-        if let u = fileURL("artwork.dat"), let d = try? Data(contentsOf: u), !d.isEmpty { return d }
-        return nil
-    }
 
     // MARK: - Настройки виджета
 

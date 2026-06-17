@@ -18,6 +18,7 @@ final class NowPlayingStreamer {
     private var task: Process?
     private var buffer = Data()
     private var state: [String: Any] = [:]   // только в очереди readabilityHandler
+    private var staleArtwork: String?        // обложка прошлого трека — отвергаем, пока не придёт новая
 
     private init() {}
 
@@ -135,13 +136,20 @@ final class NowPlayingStreamer {
         if !isDiff && payload.isEmpty { return }
         // Чужой плеер — игнор (сохраняем последнее состояние поддерживаемого).
         if let b = payload["bundleIdentifier"] as? String, !Constants.Players.supported.contains(b) { return }
-        // Смена трека — сбрасываем обложку, чтобы не показать чужую.
-        if let inTitle = payload["title"] as? String, inTitle != (state["title"] as? String) {
+        // Смена названия: адаптер ещё несколько событий присылает СТАРУЮ обложку
+        // (новая считается позже). Запоминаем старую и ОТВЕРГАЕМ все входящие, пока не
+        // придёт реально ДРУГАЯ — иначе на новом треке мелькает обложка прошлого.
+        let titleChanged = (payload["title"] as? String).map { $0 != (state["title"] as? String) } ?? false
+        if titleChanged {
+            staleArtwork = state["artworkData"] as? String   // запомнить старую, чтобы отвергать
             state["artworkData"] = nil
         }
         for (k, v) in payload {
             if k == "artworkData" {
-                if let s = v as? String, !s.isEmpty { state[k] = s }   // пустую не затираем
+                guard let s = v as? String, !s.isEmpty else { continue }   // пустую не затираем
+                if let stale = staleArtwork, s == stale { continue }       // всё ещё старая — игнор
+                staleArtwork = nil                                          // пришла новая — принимаем
+                state[k] = s
             } else {
                 state[k] = v
             }
