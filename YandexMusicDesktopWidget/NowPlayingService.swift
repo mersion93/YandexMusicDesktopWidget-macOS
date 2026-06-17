@@ -44,28 +44,6 @@ final class NowPlayingService: ObservableObject {
         }
     }
 
-    /// Надёжная перезагрузка для СМЕНЫ ТРЕКА: мгновенный пуш + два бэкапа.
-    /// Система иногда отбрасывает одиночный reload под нагрузкой, и виджет
-    /// «застывал» до следующего пульса (60с). Повторы через 1.5с и 4с ловят
-    /// отброшенный пуш. Срабатывает только при реальной смене трека/паузы,
-    /// не постоянно — поэтому бюджет WidgetKit не страдает.
-    private var awaitingHDReload = false
-    private var newTrackReloadWork: DispatchWorkItem?
-
-    /// Перезагрузка виджета при СМЕНЕ трека: ждём HD-обложку (применится в
-    /// cacheAndApplyHD и перезагрузит сразу) или фолбэк по таймауту с родной.
-    /// Так виджет обновляется ОДИН раз — без дёрганья «родная → HD».
-    private func scheduleNewTrackWidgetReload() {
-        awaitingHDReload = true
-        newTrackReloadWork?.cancel()
-        let work = DispatchWorkItem { [weak self] in
-            guard let self, self.awaitingHDReload else { return }
-            self.awaitingHDReload = false
-            WidgetCenter.shared.reloadAllTimelines()   // фолбэк: показываем что есть (родная)
-        }
-        newTrackReloadWork = work
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5, execute: work)
-    }
 
     private func reloadWidgetForcefully() {
         // ОДНА перезагрузка, без бэкапов. Бэкапы (1.5с/4с) исчерпывали суточный
@@ -105,8 +83,6 @@ final class NowPlayingService: ObservableObject {
     private func apiKey(_ t: TrackInfo) -> String {
         "\(t.title)|\(t.artist)|\(Int(t.duration.rounded()))"
     }
-    // Длительность трека из API по ключу «title|artist» (для полоски прогресса).
-    private var apiDurationMap: [String: TimeInterval] = [:]
     // Обложка высокого разрешения по id трека ЯМ — чтобы в большом виджете не было
     // пикселизации (родная из стрима ~300px, на full-bleed мылит). Храним прямой URL
     // обложки, чтобы при повторной докачке не делать второй /search.
@@ -429,23 +405,6 @@ final class NowPlayingService: ObservableObject {
         guard !artist.isEmpty, let k = artistKey(title, duration) else { return }
         if knownArtist.count > 150 { knownArtist.removeAll() }
         knownArtist[k] = artist
-    }
-
-    // Виджет ждёт HD-обложку (не показываем низкокачественную родную). Фолбэк —
-    // если HD так и не пришла, через 1.3с пишем в виджет родную.
-    private var widgetAwaitingHDArt = false
-    private var widgetArtFallbackWork: DispatchWorkItem?
-    private func scheduleWidgetNativeFallback(for track: TrackInfo) {
-        widgetAwaitingHDArt = true
-        widgetArtFallbackWork?.cancel()
-        let work = DispatchWorkItem { [weak self] in
-            guard let self, self.widgetAwaitingHDArt, self.currentTrack.title == track.title else { return }
-            self.widgetAwaitingHDArt = false
-            AppGroupManager.shared.saveTrack(self.currentTrack)   // HD не пришла — пишем родную
-            self.reloadWidgetDebounced()
-        }
-        widgetArtFallbackWork = work
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1.3, execute: work)
     }
 
     /// Если настоящий исполнитель так и не пришёл за 0.8с — значит он ТОТ ЖЕ, что был
