@@ -5,14 +5,12 @@
 воспроизведением, настраиваемое оформление.
 
 > macOS 14+ • SwiftUI • WidgetKit • без платной подписки (ad-hoc сборка)
-> <p align="center">
-  <img src="docs/screenshot3.png" width="560" alt="Скриншот">
-</p>
+
 > <p align="center">
   <img src="docs/screenshot2.png" width="560" alt="Скриншот">
 </p>
 <p align="center">
-  <img src="docs/screenshot.png" width="560" alt="Скриншот">
+  <img src="docs/screenshot3.png" width="560" alt="Скриншот">
 </p>
 
 ---
