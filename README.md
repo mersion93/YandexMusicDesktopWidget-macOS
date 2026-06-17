@@ -9,6 +9,7 @@
 > <p align="center">
   <img src="docs/screenshot2.png" width="560" alt="Скриншот">
 </p>
+
 ---
 
 ## Возможности
