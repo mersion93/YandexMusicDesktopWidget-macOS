@@ -7,14 +7,19 @@ import ImageIO
 import UniformTypeIdentifiers
 import OSLog
 
+/// ЕДИНСТВЕННЫЙ источник правды о текущем треке (Single Source of Truth).
+/// Только этот объект читает плеер (mediaremote-adapter / Accessibility) и владеет
+/// `currentTrack`. Все потребители подписываются на него и НЕ обращаются к источникам
+/// напрямую:
+///   • попап и окно — через `@Published currentTrack` (SwiftUI/Combine, в процессе);
+///   • десктопный виджет — через App Group (`track.json` + `reloadAllTimelines`), т.к.
+///     это отдельный sandboxed-процесс и подписаться на Combine он не может.
+/// Запись наружу идёт ТОЛЬКО через `publishToWidget(_:)` — она и фильтрует «значимые
+/// изменения» (см. `TrackInfo.hasSameWidgetContent`).
 final class NowPlayingService: ObservableObject {
     static let shared = NowPlayingService()
 
     @Published private(set) var currentTrack: TrackInfo = .empty
-    /// Последний успешный источник данных о треке
-    @Published private(set) var dataSource: TrackReadSource = .none
-    /// Заголовки окон ЯМ (для диагностики)
-    @Published private(set) var rawWindowTitles: [String] = []
 
     private let logger = Logger(
         subsystem: Bundle.main.bundleIdentifier ?? "com.yandexmusic.widget",
@@ -22,48 +27,69 @@ final class NowPlayingService: ObservableObject {
     )
     private var timerCancellable: AnyCancellable?
     private var likesTimer: AnyCancellable?
-    private var widgetReloadWork: DispatchWorkItem?
-    private var lastWidgetReload = Date.distantPast
 
-    /// Перезагрузка виджета: МГНОВЕННО на первое изменение (быстрая обложка),
-    /// а частые повторы в течение 0.3с схлопываются в один хвостовой (без спама лимита).
-    private func reloadWidgetDebounced() {
+    // У WidgetKit ЖЁСТКИЙ суточный бюджет на reloadAllTimelines(). Если его исчерпать
+    // (а смена трека порождает несколько событий: название → исполнитель → HD-обложка),
+    // система перестаёт перечитывать провайдер и виджет ЗАВИСАЕТ на старом треке.
+    // Поэтому ВСЕ запросы перезагрузки идут сюда и СХЛОПЫВАЮТСЯ в один фактический пуш
+    // на устоявшуюся смену трека (+ один отложенный повтор от потери пуша).
+    private var reloadWork: DispatchWorkItem?
+    private var reloadWindowStart: Date?
+    private var widgetBackupReload: DispatchWorkItem?
+
+    /// Запросить перезагрузку виджета. Несколько вызовов за ~секунду (название, затем
+    /// исполнитель, затем HD-обложка) сольются в ОДИН пуш: когда данные стали полными —
+    /// через короткую паузу 0.3с (добрать хвосты), а если так и неполны — не позже 1.5с
+    /// от первого запроса (грузим тем, что есть, чтобы не зависнуть). Попап обновляется
+    /// мгновенно из памяти и от этого пуша не зависит.
+    private func requestWidgetReload() {
         let now = Date()
-        if now.timeIntervalSince(lastWidgetReload) >= 0.3 {
-            lastWidgetReload = now
-            widgetReloadWork?.cancel(); widgetReloadWork = nil
-            WidgetCenter.shared.reloadAllTimelines()
-        } else if widgetReloadWork == nil {
-            let work = DispatchWorkItem { [weak self] in
-                self?.lastWidgetReload = Date()
-                self?.widgetReloadWork = nil
-                WidgetCenter.shared.reloadAllTimelines()
-            }
-            widgetReloadWork = work
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3, execute: work)
+        if reloadWindowStart == nil { reloadWindowStart = now }
+        let capReached = now.timeIntervalSince(reloadWindowStart!) >= 1.5
+        let needsHD = currentTrack.isYandex && YandexMusicAPI.shared.isAuthorized
+        let complete = (pendingArtist == nil) && (currentTrack.artworkData != nil || !needsHD)
+
+        reloadWork?.cancel()
+        let delay = (complete || capReached) ? 0.3 : 1.5
+        let work = DispatchWorkItem { [weak self] in
+            guard let self else { return }
+            self.reloadWindowStart = nil
+            self.reloadWork = nil
+            self.fireWidgetReload()
         }
+        reloadWork = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + delay, execute: work)
     }
 
-
-    private func reloadWidgetForcefully() {
-        // ОДНА перезагрузка, без бэкапов. Бэкапы (1.5с/4с) исчерпывали суточный
-        // бюджет WidgetKit, и система начинала ТРОТТЛИТЬ — задержка виджета скакала
-        // до 2-3с. Меньше перезагрузок → система honor'ит их быстро. Страховка от
-        // «зависания» — пульс таймлайна (см. WidgetProvider) + последующие апдейты
-        // (исполнитель/HD), которые сами перезагрузят.
-        lastWidgetReload = Date()
-        widgetReloadWork?.cancel(); widgetReloadWork = nil
+    /// Один фактический пуш + один отложенный повтор (система иногда тихо отбрасывает
+    /// одиночный пуш; повтор перевыставляется на каждом пуше — не больше двух на трек).
+    private func fireWidgetReload() {
         WidgetCenter.shared.reloadAllTimelines()
+        widgetBackupReload?.cancel()
+        let backup = DispatchWorkItem { WidgetCenter.shared.reloadAllTimelines() }
+        widgetBackupReload = backup
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2.5, execute: backup)
     }
 
     // Дедуп активных запросов статуса лайка (по ключу «title|artist»).
     private var fetchingArtwork: Set<String> = []
 
-    private var lastSignificantTitle   = ""
-    private var lastSignificantArtist  = ""
-    private var lastSignificantPlaying = false
-    private var lastArtworkPresent     = false
-    private var lastSignificantLike: LikeState = .none
+    // Последний снимок, реально записанный в track.json — чтобы не писать повторно тот
+    // же видимый контент (см. publishToWidget / TrackInfo.hasSameWidgetContent).
+    private var lastPublished: TrackInfo?
+
+    /// ЕДИНСТВЕННАЯ точка записи трека наружу (App Group → виджет). Пишет и перезагружает
+    /// виджет ТОЛЬКО при значимом изменении (название/исполнитель/обложка/пауза/лайк);
+    /// позиция воспроизведения сюда не входит. Возвращает true, если запись произошла.
+    @discardableResult
+    private func publishToWidget(_ track: TrackInfo) -> Bool {
+        if let last = lastPublished, track.hasSameWidgetContent(as: last) { return false }
+        lastPublished = track
+        AppGroupManager.shared.saveTrack(track)
+        AppGroupManager.shared.saveSyncStatus(.synced)
+        requestWidgetReload()
+        return true
+    }
 
     // Пока стрим хоть раз отдал данные и не был очищен — он основной источник,
     // и чтение через Accessibility НЕ вмешивается (иначе перебивает неверными данными).
@@ -83,10 +109,9 @@ final class NowPlayingService: ObservableObject {
     private func apiKey(_ t: TrackInfo) -> String {
         "\(t.title)|\(t.artist)|\(Int(t.duration.rounded()))"
     }
-    // Обложка высокого разрешения по id трека ЯМ — чтобы в большом виджете не было
-    // пикселизации (родная из стрима ~300px, на full-bleed мылит). Храним прямой URL
-    // обложки, чтобы при повторной докачке не делать второй /search.
-    private var hdCoverCache: [String: Data] = [:]   // ~700px HD (одна на трек)
+    // HD-обложки (~700px, по одной на трек) кэшируются в общем ArtworkCache (NSCache) —
+    // каждая скачивается и даунскейлится один раз. Здесь храним лишь служебное:
+    // активные докачки (дедуп) и прямой URL обложки (чтобы не делать второй /search).
     private var hdCoverFetching: Set<String> = []
     private var apiCoverURLMap: [String: URL] = [:]
 
@@ -236,8 +261,7 @@ final class NowPlayingService: ObservableObject {
     private func applyLikeIfCurrent(_ trackId: String, state: LikeState) {
         guard currentTrack.id == trackId, currentTrack.likeState != state else { return }
         currentTrack.likeState = state
-        AppGroupManager.shared.saveTrack(currentTrack)
-        reloadWidgetDebounced()
+        publishToWidget(currentTrack)
     }
 
     /// Лайк текущего трека (вызывается из основного окна). Только для Яндекс Музыки.
@@ -278,8 +302,7 @@ final class NowPlayingService: ObservableObject {
         let newState: LikeState = currentTrack.likeState == .liked ? .none : .liked
         likeOverrides[id] = newState
         currentTrack.likeState = newState
-        AppGroupManager.shared.saveTrack(currentTrack)
-        reloadWidgetDebounced()
+        publishToWidget(currentTrack)
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
             _ = YMActionController.shared.performLike(pid: pid)
             AppGroupManager.shared.saveLastCommand(.like)
@@ -295,8 +318,7 @@ final class NowPlayingService: ObservableObject {
         let newState: LikeState = currentTrack.likeState == .disliked ? .none : .disliked
         likeOverrides[id] = newState
         currentTrack.likeState = newState
-        AppGroupManager.shared.saveTrack(currentTrack)
-        reloadWidgetDebounced()
+        publishToWidget(currentTrack)
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
             _ = YMActionController.shared.performDislike(pid: pid)
             AppGroupManager.shared.saveLastCommand(.dislike)
@@ -331,7 +353,6 @@ final class NowPlayingService: ObservableObject {
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
             guard let self else { return }
 
-            let titles   = YMTrackReader.debugWindowTitles(pid: pid)
             let likeState = YMActionController.shared.currentLikeState(pid: pid)
 
             if var result = YMTrackReader.readCurrentTrack(pid: pid) {
@@ -340,7 +361,6 @@ final class NowPlayingService: ObservableObject {
                 DispatchQueue.main.async {
                     // Пока шло медленное AX-чтение, стрим мог дать свежие данные — не затираем их.
                     guard !self.hasStreamData else { return }
-                    self.rawWindowTitles = titles
                     self.applyTrack(finished.track, source: finished.source)
                 }
                 return
@@ -364,7 +384,6 @@ final class NowPlayingService: ObservableObject {
                 // (чаще всего: окно свёрнуто → AX-дерево заморожено Electron'ом).
                 // Не сбрасываем currentTrack на заглушку — сохраняем последнее известное.
                 DispatchQueue.main.async {
-                    self.rawWindowTitles = titles
                     let hadValidTrack = self.currentTrack.title != Constants.Media.fallbackTitle
                                     && self.currentTrack.title != Constants.Media.notRunningTitle
                     if !hadValidTrack {
@@ -419,9 +438,7 @@ final class NowPlayingService: ObservableObject {
             t.artist = stale
             t.id = "\(t.title)-\(t.artist)"
             self.currentTrack = t
-            self.lastSignificantArtist = t.artist
-            AppGroupManager.shared.saveTrack(t)
-            self.reloadWidgetDebounced()
+            self.publishToWidget(t)
             self.enrichTrack(t)   // теперь artist есть — можно искать HD/лайк
         }
         artistRevealWork = work
@@ -517,7 +534,7 @@ final class NowPlayingService: ObservableObject {
         // Нет HD → плейсхолдер-загрузка; тот же трек → держим уже показанную; уже
         // игравший → мгновенно из кэша. Для не-Яндекс (API нет) оставляем родную.
         if track.isYandex && YandexMusicAPI.shared.isAuthorized {
-            if let apiId = apiTrackIdMap[apiKey(track)], let hd = hdCoverCache[apiId] {
+            if let apiId = apiTrackIdMap[apiKey(track)], let hd = ArtworkCache.shared.data(for: apiId) {
                 track.artworkData = hd
             } else if !idChanged, let prev = currentTrack.artworkData, !prev.isEmpty {
                 track.artworkData = prev
@@ -529,36 +546,16 @@ final class NowPlayingService: ObservableObject {
             // Анимируем переход между треками через SwiftUI transaction
             withAnimation(.spring(response: 0.38, dampingFraction: 0.82)) {
                 currentTrack = track
-                dataSource   = source
             }
         } else {
             currentTrack = track
-            dataSource   = source
         }
 
-        let titleChanged   = track.title    != lastSignificantTitle
-        let artistChanged  = track.artist   != lastSignificantArtist
-        let playingChanged = track.isPlaying != lastSignificantPlaying
-        let artChanged     = (track.artworkData != nil) != lastArtworkPresent
-
-        // track.json пишем ТОЛЬКО при изменении видимого виджету контента
-        // (название/исполнитель/обложка/пауза/лайк). Позицию (elapsed) виджет не
-        // показывает, поэтому на каждое событие стрима ~150 КБ обложки в файл не
-        // гоняем — попап/окно берут позицию из currentTrack в памяти.
-        let likeChanged = track.likeState != lastSignificantLike
-        if titleChanged || artistChanged || playingChanged || artChanged || likeChanged {
-            lastSignificantTitle   = track.title
-            lastSignificantArtist  = track.artist
-            lastSignificantPlaying = track.isPlaying
-            lastArtworkPresent     = (track.artworkData != nil)
-            lastSignificantLike    = track.likeState
-            // ФОТО ВСЕГДА СРАЗУ. Если HD-варианты уже в кэше (трек играл) — пишем их
-            // (виджет покажет нужный размер). Иначе показываем родную обложку, а на
-            // смене трека убираем старые размерные варианты (чтобы не показать чужие);
-            // HD дорисуется через cacheAndApplyHD.
-            AppGroupManager.shared.saveTrack(track)   // обложка уже выставлена выше (HD/плейсхолдер)
-            AppGroupManager.shared.saveSyncStatus(.synced)
-            reloadWidgetForcefully()
+        // track.json пишем ТОЛЬКО при значимом изменении (название/исполнитель/обложка/
+        // пауза/лайк) — единая точка publishToWidget с проверкой hasSameWidgetContent.
+        // Позицию (elapsed) виджет не показывает, поэтому ~150 КБ обложки в файл на
+        // каждое событие стрима не гоняем: попап/окно берут позицию из памяти.
+        if publishToWidget(track) {
             logger.debug("Трек изменился: «\(track.title)» / \(source.rawValue) / играет=\(track.isPlaying)")
         }
 
@@ -622,7 +619,7 @@ final class NowPlayingService: ObservableObject {
     /// Применяет HD-обложку из кэша; если её нет — докачивает (нужен apiTrack для URL,
     /// поэтому при пустом кэше делаем поиск через highResCover со строгим совпадением).
     private func applyOrFetchHDCover(apiId: String, for track: TrackInfo) {
-        if let data = hdCoverCache[apiId] {
+        if let data = ArtworkCache.shared.data(for: apiId) {
             cacheAndApplyHD(data, apiId: apiId, for: track)
             return
         }
@@ -640,7 +637,7 @@ final class NowPlayingService: ObservableObject {
 
     /// Качает HD-обложку по готовому URL и применяет к текущему треку.
     private func fetchHDCover(_ url: URL, apiId: String, for track: TrackInfo) {
-        if let data = hdCoverCache[apiId] { cacheAndApplyHD(data, apiId: apiId, for: track); return }
+        if let data = ArtworkCache.shared.data(for: apiId) { cacheAndApplyHD(data, apiId: apiId, for: track); return }
         guard !hdCoverFetching.contains(apiId) else { return }
         hdCoverFetching.insert(apiId)
         YandexMusicAPI.shared.fetchCover(url) { [weak self] data in
@@ -682,12 +679,10 @@ final class NowPlayingService: ObservableObject {
     }
 
     private func cacheAndApplyHD(_ data: Data, apiId: String, for track: TrackInfo) {
-        hdCoverCache[apiId] = data
-        if hdCoverCache.count > 60 { hdCoverCache.removeAll(); hdCoverCache[apiId] = data }
+        ArtworkCache.shared.store(data, for: apiId)
         guard currentTrack.id == track.id, currentTrack.artworkData != data else { return }
         currentTrack.artworkData = data
-        AppGroupManager.shared.saveTrack(currentTrack)   // название+HD-обложка атомарно
-        reloadWidgetDebounced()
+        publishToWidget(currentTrack)   // название+HD-обложка атомарно, если контент сменился
     }
 
     /// Выполняет команду из виджета. Медиаклавиши (play/next/prev) работают для любого

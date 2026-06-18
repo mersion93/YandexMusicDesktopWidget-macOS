@@ -13,6 +13,7 @@
 		AA0000000000000000000304 /* NowPlayingService.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000000000000000000104 /* NowPlayingService.swift */; };
 		AA0000000000000000000306 /* Constants.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000000000000000000121 /* Constants.swift */; };
 		AA0000000000000000000307 /* SharedModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000000000000000000122 /* SharedModels.swift */; };
+		AA0000000000000000000400 /* ArtworkCache.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000000000000000000401 /* ArtworkCache.swift */; };
 		AA0000000000000000000308 /* AppGroupManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000000000000000000123 /* AppGroupManager.swift */; };
 		AA00000000000000000003A1 /* Localization.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA00000000000000000001A1 /* Localization.swift */; };
 		AA0000000000000000000309 /* MediaRemoteHelper.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000000000000000000124 /* MediaRemoteHelper.swift */; };
@@ -81,6 +82,7 @@
 		AA0000000000000000000116 /* YandexMusicDesktopWidgetExtension.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = YandexMusicDesktopWidgetExtension.entitlements; sourceTree = "<group>"; };
 		AA0000000000000000000121 /* Constants.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Constants.swift; sourceTree = "<group>"; };
 		AA0000000000000000000122 /* SharedModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedModels.swift; sourceTree = "<group>"; };
+		AA0000000000000000000401 /* ArtworkCache.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ArtworkCache.swift; sourceTree = "<group>"; };
 		AA0000000000000000000123 /* AppGroupManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppGroupManager.swift; sourceTree = "<group>"; };
 		AA00000000000000000001A1 /* Localization.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Localization.swift; sourceTree = "<group>"; };
 		AA0000000000000000000124 /* MediaRemoteHelper.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MediaRemoteHelper.swift; sourceTree = "<group>"; };
@@ -163,6 +165,7 @@
 			children = (
 				AA0000000000000000000121 /* Constants.swift */,
 				AA0000000000000000000122 /* SharedModels.swift */,
+				AA0000000000000000000401 /* ArtworkCache.swift */,
 				AA0000000000000000000123 /* AppGroupManager.swift */,
 				AA00000000000000000001A1 /* Localization.swift */,
 				AA0000000000000000000124 /* MediaRemoteHelper.swift */,
@@ -280,6 +283,7 @@
 				AA000000000000000000090D /* MainWindowView.swift in Sources */,
 				AA0000000000000000000306 /* Constants.swift in Sources */,
 				AA0000000000000000000307 /* SharedModels.swift in Sources */,
+				AA0000000000000000000400 /* ArtworkCache.swift in Sources */,
 				AA0000000000000000000308 /* AppGroupManager.swift in Sources */,
 				AA00000000000000000003A1 /* Localization.swift in Sources */,
 				AA0000000000000000000309 /* MediaRemoteHelper.swift in Sources */,

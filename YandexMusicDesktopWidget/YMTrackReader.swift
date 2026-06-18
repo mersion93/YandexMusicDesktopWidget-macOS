@@ -67,8 +67,6 @@ struct YMTrackReader {
         return nil
     }
 
-    static func debugWindowTitles(pid: pid_t) -> [String] { allWindowTitles(pid: pid) }
-
     static var isScreenRecordingGranted: Bool {
         guard let list = CGWindowListCopyWindowInfo(
             [.optionAll, .excludeDesktopElements], kCGNullWindowID

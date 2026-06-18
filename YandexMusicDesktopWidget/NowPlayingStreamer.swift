@@ -96,6 +96,26 @@ final class NowPlayingStreamer {
         }
     }
 
+    /// Отправляет команду НАПРЯМУЮ приложению «Сейчас играет» через адаптер
+    /// (`send <MRCommand>`). Надёжнее глобальных медиа-клавиш: те уходят тому
+    /// приложению, что владеет системным Now Playing (может быть Apple Music,
+    /// видео в браузере и т.п.), а это — точно текущему плееру (Яндекс).
+    /// MRCommand: 2 = togglePlayPause, 4 = next, 5 = previous.
+    func sendCommand(_ id: Int) {
+        guard let paths = adapterPaths() else { return }
+        DispatchQueue.global(qos: .userInitiated).async {
+            let p = Process()
+            p.executableURL = URL(fileURLWithPath: "/usr/bin/perl")
+            p.arguments = [paths.pl, paths.framework, "send", "\(id)"]
+            p.standardOutput = Pipe(); p.standardError = FileHandle.nullDevice
+            do { try p.run() } catch { return }
+            let watchdog = DispatchWorkItem { if p.isRunning { p.terminate() } }
+            DispatchQueue.global().asyncAfter(deadline: .now() + 2.0, execute: watchdog)
+            p.waitUntilExit()
+            watchdog.cancel()
+        }
+    }
+
     /// Перемотка трека на позицию в секундах (через `seek`, мкс).
     func seek(toSeconds seconds: Double) {
         guard let paths = adapterPaths(), seconds >= 0 else { return }

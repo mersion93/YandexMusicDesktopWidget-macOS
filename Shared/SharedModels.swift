@@ -23,6 +23,18 @@ struct TrackInfo: Codable, Equatable {
     /// Лайк/дизлайк доступны только для Яндекс Музыки (через её API/AX).
     var isYandex: Bool { playerBundleID == "ru.yandex.desktop.music" || playerBundleID.isEmpty }
 
+    /// Совпадает ли ВИДИМЫЙ виджету/попапу контент (без позиции/времени обновления).
+    /// Это и есть критерий «значимого изменения»: только при его срабатывании имеет
+    /// смысл переписывать track.json и перезагружать виджет. Позицию (elapsed) виджет
+    /// не показывает, поэтому она сюда НЕ входит — иначе писали бы файл каждую секунду.
+    func hasSameWidgetContent(as other: TrackInfo) -> Bool {
+        title == other.title
+            && artist == other.artist
+            && artworkData == other.artworkData
+            && isPlaying == other.isPlaying
+            && likeState == other.likeState
+    }
+
     /// Нет реального трека (заглушка/не запущено) — виджет показывает чистый пустой вид.
     var isPlaceholder: Bool {
         title.isEmpty

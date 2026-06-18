@@ -375,8 +375,12 @@ struct ContentView: View {
                         .foregroundStyle(.secondary)
                         .lineLimit(1)
                         .contentTransition(.opacity)
-                    if !service.currentTrack.album.isEmpty {
-                        Text(service.currentTrack.album)
+                    // Альбом. Пока исполнитель скрыт маской (artist == ""), альбом тоже
+                    // прячем (показываем " "), иначе на новом треке мелькал бы СТАРЫЙ
+                    // альбом — рассинхрон с замаскированным исполнителем. Для треков с
+                    // альбомом строка присутствует всегда (нет «прыжка» высоты).
+                    if !service.currentTrack.album.isEmpty || service.currentTrack.artist.isEmpty {
+                        Text(service.currentTrack.artist.isEmpty ? " " : service.currentTrack.album)
                             .font(.system(size: 10, design: .rounded))
                             .foregroundStyle(.tertiary)
                             .lineLimit(1)
