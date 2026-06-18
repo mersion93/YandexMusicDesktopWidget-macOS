@@ -2,8 +2,8 @@
 
 # 🎵 YandexMusicDesktopWidget
 
-**A "Now Playing" widget for Yandex Music on macOS** — desktop & menu bar,
-HD artwork, likes, and playback controls.
+**A "Now Playing" widget for Yandex Music on macOS**
+Desktop & menu bar · HD artwork · likes · playback controls
 
 [Русский](README.md) · **English**
 
@@ -12,7 +12,7 @@ HD artwork, likes, and playback controls.
 [![Downloads](https://img.shields.io/github/downloads/mersion93/YandexMusicDesktopWidget-macOS/total?color=ffcc00)](../../releases)
 [![License](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 
-<img src="docs/screenshot2.png" width="640" alt="Desktop widgets">
+<img src="docs/screenshot.png" width="720" alt="Yandex Music desktop widgets">
 
 </div>
 
@@ -20,12 +20,22 @@ HD artwork, likes, and playback controls.
 
 ## ✨ Features
 
-| | |
-|---|---|
-| 🎵 Three desktop widget sizes | 🖼 High-quality artwork |
-| ❤️ Like / dislike from the widget | ⏯ Play/pause, skip, scrub |
-| 🪟 Menu-bar popup (2 styles) + window | 🌍 Russian & English UI |
-| 🚀 Launch at login | ⚡️ Works even when the player is minimized |
+- 🎵 **Three desktop widget sizes** — small, medium, large
+- 🖼 **HD artwork** — crisp even on the large widget
+- ⏯ **Controls** — play/pause, skip, scrub straight from the widget and popup
+- ⚡️ **Instant track switching** — no lag, and the widget never freezes on an old track
+- ❤️ **Like / dislike** in one click, synced with Yandex Music
+- 🪟 **Menu-bar popup** in two styles ("Compact" and "Card") + a standalone window
+- 🌍 **Russian & English** UI — system default or manual
+- 🚀 **Launch at login**, and works even when the player is minimized
+
+<div align="center">
+<details>
+<summary><b>🖼 More screenshots</b></summary>
+<br>
+<img src="docs/screenshot3.png" width="720" alt="Widgets, menu-bar popup, window and settings">
+</details>
+</div>
 
 ## 📥 Installation
 
@@ -60,7 +70,7 @@ HD artwork, likes, and playback controls.
 Requires Xcode 16+ and macOS 14+:
 
 ```bash
-bash release_tools/make_release.sh 1.0.0   # builds the .app and DMG
+bash release_tools/make_release.sh 1.0.1   # builds the .app and DMG
 ```
 
 Architecture overview: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
