@@ -1,6 +1,4 @@
 import SwiftUI
-import ServiceManagement
-import WidgetKit
 
 private extension Color {
     static let ymYellow = Color(red: 1.00, green: 0.84, blue: 0.00)
@@ -37,12 +35,34 @@ struct MainWindowView: View {
     }
 
     var body: some View {
-        NavigationSplitView {
-            List(Section.allCases, selection: $section) { s in
-                Label(s.title, systemImage: s.icon).tag(s)
+        // Боковая панель + контент. NavigationSplitView/List(selection:) доступны только
+        // с macOS 13, поэтому на старых системах — собственный сайдбар на кнопках.
+        HStack(spacing: 0) {
+            VStack(alignment: .leading, spacing: 2) {
+                ForEach(Section.allCases) { s in
+                    Button { section = s } label: {
+                        Label(s.title, systemImage: s.icon)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 7)
+                            .background(
+                                RoundedRectangle(cornerRadius: 7, style: .continuous)
+                                    .fill(section == s ? Color.ymYellow.opacity(0.18) : Color.clear)
+                            )
+                            .foregroundColor(section == s ? Color.ymYellow : Color.primary)
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                }
+                Spacer()
             }
-            .navigationSplitViewColumnWidth(190)
-        } detail: {
+            .padding(8)
+            .frame(width: 190)
+            .frame(maxHeight: .infinity)
+            .background(Color(NSColor.windowBackgroundColor))
+
+            Divider()
+
             Group {
                 switch section {
                 case .nowPlaying: NowPlayingPane()
@@ -98,9 +118,9 @@ struct NowPlayingPane: View {
 
             VStack(spacing: 4) {
                 Text(track.title).font(.system(size: 20, weight: .bold)).lineLimit(1)
-                Text(track.artist.isEmpty ? " " : track.artist).font(.system(size: 14)).foregroundStyle(.secondary).lineLimit(1)
+                Text(track.artist.isEmpty ? " " : track.artist).font(.system(size: 14)).foregroundColor(.secondary).lineLimit(1)
                 Text(playerName).font(.system(size: 11, weight: .medium))
-                    .foregroundStyle(Color.ymYellow).padding(.top, 2)
+                    .foregroundColor(Color.ymYellow).padding(.top, 2)
             }
 
             if track.duration > 0 {
@@ -121,9 +141,9 @@ struct NowPlayingPane: View {
                     }
                     .frame(height: 12)
                     HStack {
-                        Text(fmt(elapsed)).font(.system(size: 10, design: .monospaced)).foregroundStyle(.secondary)
+                        Text(fmt(elapsed)).font(.system(size: 10, design: .monospaced)).foregroundColor(.secondary)
                         Spacer()
-                        Text(fmt(track.duration)).font(.system(size: 10, design: .monospaced)).foregroundStyle(.secondary)
+                        Text(fmt(track.duration)).font(.system(size: 10, design: .monospaced)).foregroundColor(.secondary)
                     }
                 }
                 .frame(width: 280)
@@ -165,7 +185,7 @@ struct NowPlayingPane: View {
             ZStack {
                 LinearGradient(colors: [Color(red: 0.22, green: 0.08, blue: 0.02), .black],
                                startPoint: .topLeading, endPoint: .bottomTrailing)
-                Text("Я").font(.system(size: 64, weight: .black)).foregroundStyle(Color.ymYellow)
+                Text("Я").font(.system(size: 64, weight: .black)).foregroundColor(Color.ymYellow)
             }
         }
     }
@@ -199,7 +219,7 @@ struct NowPlayingPane: View {
     private func fmt(_ s: TimeInterval) -> String { String(format: "%d:%02d", Int(s)/60, Int(s)%60) }
     private func ctrl(_ icon: String, _ size: CGFloat, tint: Color = .primary, _ action: @escaping () -> Void) -> some View {
         Button(action: action) {
-            Image(systemName: icon).font(.system(size: size, weight: .semibold)).foregroundStyle(tint)
+            Image(systemName: icon).font(.system(size: size, weight: .semibold)).foregroundColor(tint)
                 .frame(width: 40, height: 40)
         }.buttonStyle(.plain)
     }
@@ -220,22 +240,22 @@ struct PlayersPane: View {
             Text(tr("Поддерживаемые плееры", "Supported players"))
                 .font(.system(size: 18, weight: .bold)).padding(.bottom, 4)
             Text(tr("Виджет автоматически показывает тот плеер, который сейчас играет в системе.", "The widget automatically shows whichever player is currently playing."))
-                .font(.system(size: 12)).foregroundStyle(.secondary).padding(.bottom, 18)
+                .font(.system(size: 12)).foregroundColor(.secondary).padding(.bottom, 18)
 
             ForEach(players, id: \.id) { p in
                 let active = service.currentTrack.playerBundleID == p.id
                 HStack(spacing: 12) {
                     Image(systemName: p.icon).font(.system(size: 18))
-                        .foregroundStyle(active ? Color.ymYellow : .secondary).frame(width: 28)
+                        .foregroundColor(active ? Color.ymYellow : .secondary).frame(width: 28)
                     VStack(alignment: .leading, spacing: 2) {
                         Text(p.name).font(.system(size: 14, weight: .medium))
                         Text(p.id == Constants.Players.yandex ? tr("Полная поддержка (лайки, обложки)", "Full support (likes, artwork)") : tr("Воспроизведение, обложка, прогресс", "Playback, artwork, progress"))
-                            .font(.system(size: 11)).foregroundStyle(.secondary)
+                            .font(.system(size: 11)).foregroundColor(.secondary)
                     }
                     Spacer()
                     if active {
                         Text(tr("Играет", "Playing")).font(.system(size: 11, weight: .semibold))
-                            .foregroundStyle(Color.ymYellow)
+                            .foregroundColor(Color.ymYellow)
                             .padding(.horizontal, 8).padding(.vertical, 3)
                             .background(Color.ymYellow.opacity(0.12)).clipShape(Capsule())
                     }
@@ -257,7 +277,7 @@ struct SettingsPane: View {
     @ObservedObject private var service = NowPlayingService.shared
     @State private var ymAuthorized = YandexMusicAPI.shared.isAuthorized
     @State private var axGranted = YMTrackReader.isAccessibilityGranted
-    @State private var launchAtLogin = (SMAppService.mainApp.status == .enabled)
+    @State private var launchAtLogin = LoginItem.isEnabled
     @AppStorage("popup_style") private var popupStyle = "compact"
     @AppStorage(AppLang.key) private var appLanguage = "auto"
     private let ticker = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
@@ -269,13 +289,13 @@ struct SettingsPane: View {
                     HStack {
                         VStack(alignment: .leading, spacing: 2) {
                             Text(ymAuthorized ? tr("Вход выполнен", "Signed in") : tr("Вход не выполнен", "Not signed in")).font(.system(size: 13))
-                            Text(tr("Настоящие обложки и избранное", "Real artwork and favorites")).font(.system(size: 11)).foregroundStyle(.secondary)
+                            Text(tr("Настоящие обложки и избранное", "Real artwork and favorites")).font(.system(size: 11)).foregroundColor(.secondary)
                         }
                         Spacer()
                         if ymAuthorized {
                             Button(tr("Выйти", "Sign out")) { YandexMusicAPI.shared.logout(); ymAuthorized = false }
                         } else {
-                            Button(tr("Войти", "Sign in")) { loginYandex() }.tint(Color.ymYellow)
+                            Button(tr("Войти", "Sign in")) { loginYandex() }.accentColor(Color.ymYellow)
                         }
                     }
                 }
@@ -284,13 +304,13 @@ struct SettingsPane: View {
                     HStack {
                         VStack(alignment: .leading, spacing: 2) {
                             Text("Accessibility").font(.system(size: 13))
-                            Text(tr("Лайк/дизлайк и запасное чтение трека", "Likes/dislikes and fallback track reading")).font(.system(size: 11)).foregroundStyle(.secondary)
+                            Text(tr("Лайк/дизлайк и запасное чтение трека", "Likes/dislikes and fallback track reading")).font(.system(size: 11)).foregroundColor(.secondary)
                         }
                         Spacer()
                         if axGranted {
-                            Image(systemName: "checkmark.circle.fill").foregroundStyle(.green)
+                            Image(systemName: "checkmark.circle.fill").foregroundColor(.green)
                         } else {
-                            Button(tr("Разрешить", "Grant")) { YMTrackReader.requestAccessibilityPermission() }.tint(Color.ymYellow)
+                            Button(tr("Разрешить", "Grant")) { YMTrackReader.requestAccessibilityPermission() }.accentColor(Color.ymYellow)
                         }
                     }
                 }
@@ -299,15 +319,14 @@ struct SettingsPane: View {
                     HStack {
                         VStack(alignment: .leading, spacing: 2) {
                             Text(tr("Запускать при входе", "Launch at login")).font(.system(size: 13))
-                            Text(tr("Открывать приложение при включении Mac", "Open the app when the Mac starts")).font(.system(size: 11)).foregroundStyle(.secondary)
+                            Text(tr("Открывать приложение при включении Mac", "Open the app when the Mac starts")).font(.system(size: 11)).foregroundColor(.secondary)
                         }
                         Spacer()
                         Toggle("", isOn: $launchAtLogin)
                             .labelsHidden()
-                            .toggleStyle(.switch).tint(Color.ymYellow)
+                            .toggleStyle(.switch).accentColor(Color.ymYellow)
                             .onChange(of: launchAtLogin) { on in
-                                do { if on { try SMAppService.mainApp.register() } else { try SMAppService.mainApp.unregister() } }
-                                catch { launchAtLogin = (SMAppService.mainApp.status == .enabled) }
+                                if !LoginItem.setEnabled(on) { launchAtLogin = LoginItem.isEnabled }
                             }
                     }
                 }
@@ -321,9 +340,8 @@ struct SettingsPane: View {
                     .pickerStyle(.segmented)
                     .labelsHidden()
                     .onChange(of: appLanguage) { lang in
-                        AppGroupManager.shared.saveLanguage(lang)   // чтобы виджет тоже знал
+                        AppGroupManager.shared.saveLanguage(lang)
                         AppLang.refresh()
-                        WidgetCenter.shared.reloadAllTimelines()
                     }
                 }
 
@@ -334,17 +352,17 @@ struct SettingsPane: View {
                         Spacer()
                     }
                     Text(tr("Применяется при следующем открытии попапа.", "Applies the next time you open the popup."))
-                        .font(.system(size: 11)).foregroundStyle(.secondary)
+                        .font(.system(size: 11)).foregroundColor(.secondary)
                 }
 
                 group(tr("Оформление виджета", "Widget appearance")) {
                     HStack(alignment: .top, spacing: 10) {
-                        Image(systemName: "paintbrush").foregroundStyle(Color.ymYellow).font(.system(size: 14))
+                        Image(systemName: "paintbrush").foregroundColor(Color.ymYellow).font(.system(size: 14))
                         VStack(alignment: .leading, spacing: 3) {
                             Text(tr("Цвет, фон и элементы настраиваются для каждого виджета отдельно", "Color, background and elements are configured per widget"))
                                 .font(.system(size: 13))
                             Text(tr("Правый клик по виджету на рабочем столе → «Редактировать виджет»", "Right-click the widget on the desktop → “Edit Widget”"))
-                                .font(.system(size: 11)).foregroundStyle(.secondary)
+                                .font(.system(size: 11)).foregroundColor(.secondary)
                         }
                         Spacer()
                     }
@@ -365,7 +383,7 @@ struct SettingsPane: View {
 
     private func group<C: View>(_ title: String, @ViewBuilder _ content: () -> C) -> some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text(title).font(.system(size: 12, weight: .semibold)).foregroundStyle(.secondary)
+            Text(title).font(.system(size: 12, weight: .semibold)).foregroundColor(.secondary)
             content()
         }
     }
@@ -388,10 +406,10 @@ struct SettingsPane: View {
                 HStack(spacing: 5) {
                     Image(systemName: selected ? "checkmark.circle.fill" : "circle")
                         .font(.system(size: 11))
-                        .foregroundStyle(selected ? Color.ymYellow : .secondary)
+                        .foregroundColor(selected ? Color.ymYellow : .secondary)
                     Text(title)
                         .font(.system(size: 12, weight: selected ? .semibold : .regular))
-                        .foregroundStyle(.primary)
+                        .foregroundColor(.primary)
                 }
             }
         }
@@ -417,18 +435,18 @@ struct AboutPane: View {
     var body: some View {
         VStack(spacing: 14) {
             Image(systemName: "music.note")
-                .font(.system(size: 52, weight: .bold)).foregroundStyle(Color.ymYellow)
+                .font(.system(size: 52, weight: .bold)).foregroundColor(Color.ymYellow)
                 .frame(width: 96, height: 96)
                 .background(Color.ymYellow.opacity(0.1)).clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
             Text("Music Widget").font(.system(size: 22, weight: .bold))
-            Text(version).font(.system(size: 12)).foregroundStyle(.secondary)
+            Text(version).font(.system(size: 12)).foregroundColor(.secondary)
             Text(tr("Виджет «Сейчас играет» для рабочего стола и меню-бара.\nПоддержка Яндекс Музыки, Spotify и Apple Music.",
                     "A “Now Playing” widget for your desktop and menu bar.\nSupports Yandex Music, Spotify and Apple Music."))
-                .font(.system(size: 13)).foregroundStyle(.secondary)
+                .font(.system(size: 13)).foregroundColor(.secondary)
                 .multilineTextAlignment(.center).frame(maxWidth: 360).padding(.top, 4)
 
             VStack(spacing: 3) {
-                Text(tr("Разработчик", "Developer")).font(.system(size: 11)).foregroundStyle(.secondary)
+                Text(tr("Разработчик", "Developer")).font(.system(size: 11)).foregroundColor(.secondary)
                 Text("Alexandr Bykhanov").font(.system(size: 14, weight: .semibold))
             }
             .padding(.top, 10)
@@ -445,9 +463,8 @@ struct AboutPane: View {
                 }
                 .padding(.horizontal, 16).padding(.vertical, 8)
             }
-            .buttonStyle(.borderedProminent)
-            .tint(Color.ymYellow)
-            .foregroundStyle(.black)
+            .accentColor(Color.ymYellow)
+            .foregroundColor(.black)
             .padding(.top, 6)
 
             Spacer()
@@ -469,10 +486,10 @@ struct OnboardingView: View {
     var body: some View {
         VStack(spacing: 18) {
             Image(systemName: "music.note")
-                .font(.system(size: 44, weight: .bold)).foregroundStyle(Color.ymYellow)
+                .font(.system(size: 44, weight: .bold)).foregroundColor(Color.ymYellow)
             Text(tr("Добро пожаловать", "Welcome")).font(.system(size: 22, weight: .bold))
             Text(tr("Виджет покажет, что играет в Яндекс Музыке, Spotify или Apple Music.", "The widget shows what’s playing in Yandex Music, Spotify or Apple Music."))
-                .font(.system(size: 13)).foregroundStyle(.secondary)
+                .font(.system(size: 13)).foregroundColor(.secondary)
                 .multilineTextAlignment(.center).frame(maxWidth: 380)
 
             VStack(spacing: 12) {
@@ -490,7 +507,7 @@ struct OnboardingView: View {
             .frame(maxWidth: 420)
 
             Button(tr("Начать", "Get Started")) { onDone() }
-                .buttonStyle(.borderedProminent).controlSize(.large).tint(Color.ymYellow)
+                .controlSize(.large).accentColor(Color.ymYellow)
                 .padding(.top, 6)
         }
         .padding(36)
@@ -505,12 +522,12 @@ struct OnboardingView: View {
         HStack(spacing: 12) {
             ZStack {
                 Circle().fill(done ? Color.green : Color.ymYellow.opacity(0.18)).frame(width: 28, height: 28)
-                if done { Image(systemName: "checkmark").font(.system(size: 12, weight: .bold)).foregroundStyle(.white) }
-                else { Text(num).font(.system(size: 13, weight: .bold)).foregroundStyle(Color.ymYellow) }
+                if done { Image(systemName: "checkmark").font(.system(size: 12, weight: .bold)).foregroundColor(.white) }
+                else { Text(num).font(.system(size: 13, weight: .bold)).foregroundColor(Color.ymYellow) }
             }
             VStack(alignment: .leading, spacing: 2) {
                 Text(title).font(.system(size: 13, weight: .medium))
-                Text(subtitle).font(.system(size: 11)).foregroundStyle(.secondary)
+                Text(subtitle).font(.system(size: 11)).foregroundColor(.secondary)
             }
             Spacer()
             if let action, !done {
@@ -552,10 +569,10 @@ struct CompactMock: View {
                     Capsule().fill(Color.secondary.opacity(0.45)).frame(width: 36, height: 3)
                 }
                 Spacer(minLength: 4)
-                Image(systemName: "heart.fill").font(.system(size: 9)).foregroundStyle(Color.ymYellowMock)
+                Image(systemName: "heart.fill").font(.system(size: 9)).foregroundColor(Color.ymYellowMock)
             }
             Capsule().fill(Color.secondary.opacity(0.25)).frame(height: 3)
-                .overlay(alignment: .leading) { Capsule().fill(Color.ymYellowMock).frame(width: 44, height: 3) }
+                .overlay(Capsule().fill(Color.ymYellowMock).frame(width: 44, height: 3), alignment: .leading)
             HStack(spacing: 12) {
                 Circle().fill(Color.secondary.opacity(0.55)).frame(width: 5, height: 5)
                 Circle().fill(Color.ymYellowMock).frame(width: 9, height: 9)
@@ -575,13 +592,13 @@ struct CardMock: View {
             Capsule().fill(Color.primary.opacity(0.55)).frame(width: 48, height: 4).padding(.top, 2)
             Capsule().fill(Color.secondary.opacity(0.45)).frame(width: 32, height: 3)
             Capsule().fill(Color.secondary.opacity(0.25)).frame(width: 96, height: 3)
-                .overlay(alignment: .leading) { Capsule().fill(Color.ymYellowMock).frame(width: 32, height: 3) }
+                .overlay(Capsule().fill(Color.ymYellowMock).frame(width: 32, height: 3), alignment: .leading)
                 .padding(.top, 1)
             HStack(spacing: 9) {
                 Circle().fill(Color.secondary.opacity(0.55)).frame(width: 5, height: 5)
                 Circle().fill(Color.ymYellowMock).frame(width: 9, height: 9)
                 Circle().fill(Color.secondary.opacity(0.55)).frame(width: 5, height: 5)
-                Image(systemName: "heart.fill").font(.system(size: 7)).foregroundStyle(Color.ymYellowMock)
+                Image(systemName: "heart.fill").font(.system(size: 7)).foregroundColor(Color.ymYellowMock)
             }
             .padding(.top, 1)
         }

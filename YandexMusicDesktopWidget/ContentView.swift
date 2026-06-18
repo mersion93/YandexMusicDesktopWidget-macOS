@@ -1,6 +1,5 @@
 import SwiftUI
 import Combine
-import ServiceManagement
 
 private extension Color {
     static let ymYellow = Color(red: 1.00, green: 0.84, blue: 0.00)
@@ -57,8 +56,6 @@ struct ContentView: View {
     @StateObject private var service = NowPlayingService.shared
     @State private var axGranted     = false
     @State private var ymAuthorized  = YandexMusicAPI.shared.isAuthorized
-    @State private var launchAtLogin = (SMAppService.mainApp.status == .enabled)
-    @Environment(\.openWindow) private var openWindow
 
     // Прогресс и хронометраж
     @State private var elapsedSeconds: TimeInterval = 0
@@ -153,20 +150,18 @@ struct ContentView: View {
             VStack(spacing: 5) {
                 Text(service.currentTrack.title)
                     .font(.system(size: 21, weight: .bold, design: .rounded))
-                    .foregroundStyle(.primary)
+                    .foregroundColor(.primary)
                     .lineLimit(1)
-                    .contentTransition(.opacity)
                 // Пробел вместо пустой строки — резервируем высоту, чтобы попап не
                 // «прыгал», пока исполнитель скрыт маской и потом появляется.
                 Text(service.currentTrack.artist.isEmpty ? " " : service.currentTrack.artist)
                     .font(.system(size: 14, design: .rounded))
-                    .foregroundStyle(.secondary)
+                    .foregroundColor(.secondary)
                     .lineLimit(1)
                     .multilineTextAlignment(.center)
-                    .contentTransition(.opacity)
                 Text(playerName)
                     .font(.system(size: 12, weight: .semibold, design: .rounded))
-                    .foregroundStyle(Color.ymYellow)
+                    .foregroundColor(Color.ymYellow)
                     .padding(.top, 2)
             }
             .frame(maxWidth: .infinity)
@@ -231,7 +226,7 @@ struct ContentView: View {
                     )
                     Text("Я")
                         .font(.system(size: 60, weight: .black))
-                        .foregroundStyle(Color.ymYellow)
+                        .foregroundColor(Color.ymYellow)
                 }
             }
         }
@@ -274,10 +269,10 @@ struct ContentView: View {
                 .frame(height: 14)
                 HStack {
                     Text(formatDuration(elapsedSeconds))
-                        .font(.system(size: 11, design: .monospaced)).foregroundStyle(.secondary)
+                        .font(.system(size: 11, design: .monospaced)).foregroundColor(.secondary)
                     Spacer()
                     Text(formatDuration(dur))
-                        .font(.system(size: 11, design: .monospaced)).foregroundStyle(.secondary)
+                        .font(.system(size: 11, design: .monospaced)).foregroundColor(.secondary)
                 }
             }
             .transition(.opacity)
@@ -323,10 +318,9 @@ struct ContentView: View {
         HStack(spacing: 8) {
             Image(systemName: "music.note")
                 .font(.system(size: 15, weight: .semibold))
-                .foregroundStyle(Color.ymYellow)
+                .foregroundColor(Color.ymYellow)
             Text(playerName)
                 .font(.system(size: 13, weight: .semibold))
-                .contentTransition(.opacity)
             Spacer()
             // Статус: анимированный эквалайзер при воспроизведении, иначе точка «Пауза»
             HStack(spacing: 5) {
@@ -334,14 +328,14 @@ struct ContentView: View {
                     EqualizerBars(color: Color.ymYellow)
                     Text(tr("Играет", "Playing"))
                         .font(.system(size: 10, weight: .semibold))
-                        .foregroundStyle(Color.ymYellow)
+                        .foregroundColor(Color.ymYellow)
                 } else {
                     Circle()
                         .fill(Color.secondary.opacity(0.4))
                         .frame(width: 6, height: 6)
                     Text(tr("Пауза", "Paused"))
                         .font(.system(size: 10))
-                        .foregroundStyle(.secondary)
+                        .foregroundColor(.secondary)
                 }
             }
             .animation(.easeInOut(duration: 0.25), value: service.currentTrack.isPlaying)
@@ -367,14 +361,12 @@ struct ContentView: View {
                 VStack(alignment: .leading, spacing: 4) {
                     Text(service.currentTrack.title)
                         .font(.system(size: 13, weight: .semibold, design: .rounded))
-                        .foregroundStyle(.primary)
+                        .foregroundColor(.primary)
                         .lineLimit(1)
-                        .contentTransition(.opacity)
                     Text(service.currentTrack.artist.isEmpty ? " " : service.currentTrack.artist)
                         .font(.system(size: 11, design: .rounded))
-                        .foregroundStyle(.secondary)
+                        .foregroundColor(.secondary)
                         .lineLimit(1)
-                        .contentTransition(.opacity)
                     // Альбом. Пока исполнитель скрыт маской (artist == ""), альбом тоже
                     // прячем (показываем " "), иначе на новом треке мелькал бы СТАРЫЙ
                     // альбом — рассинхрон с замаскированным исполнителем. Для треков с
@@ -382,9 +374,8 @@ struct ContentView: View {
                     if !service.currentTrack.album.isEmpty || service.currentTrack.artist.isEmpty {
                         Text(service.currentTrack.artist.isEmpty ? " " : service.currentTrack.album)
                             .font(.system(size: 10, design: .rounded))
-                            .foregroundStyle(.tertiary)
+                            .foregroundColor(Color.secondary.opacity(0.55))
                             .lineLimit(1)
-                            .contentTransition(.opacity)
                     }
                 }
                 .animation(.spring(response: 0.35, dampingFraction: 0.85),
@@ -443,7 +434,7 @@ struct ContentView: View {
                         ))
                     Text("Я")
                         .font(.system(size: 22, weight: .black))
-                        .foregroundStyle(Color.ymYellow)
+                        .foregroundColor(Color.ymYellow)
                 }
                 .frame(width: 56, height: 56)
             }
@@ -468,7 +459,7 @@ struct ContentView: View {
                     .shadow(color: Color.ymYellow.opacity(0.38), radius: 6, y: 2)
                 Image(systemName: service.currentTrack.isPlaying ? "pause.fill" : "play.fill")
                     .font(.system(size: 14, weight: .semibold))
-                    .foregroundStyle(.black)
+                    .foregroundColor(.black)
                     .offset(x: service.currentTrack.isPlaying ? 0 : 1)
                     .animation(.easeInOut(duration: 0.18), value: service.currentTrack.isPlaying)
             }
@@ -489,7 +480,7 @@ struct ContentView: View {
         }) {
             Image(systemName: icon)
                 .font(.system(size: size, weight: .semibold))
-                .foregroundStyle(.primary.opacity(0.7))
+                .foregroundColor(.primary.opacity(0.7))
                 .frame(width: 28, height: 28)
         }
         .buttonStyle(.plain)
@@ -503,7 +494,7 @@ struct ContentView: View {
         Button(action: { service.likeCurrentTrack() }) {
             Image(systemName: service.currentTrack.likeState == .liked ? "heart.fill" : "heart")
                 .font(.system(size: 14, weight: .medium))
-                .foregroundStyle(service.currentTrack.likeState == .liked
+                .foregroundColor(service.currentTrack.likeState == .liked
                                  ? Color.ymYellow : Color.secondary)
                 .scaleEffect(service.currentTrack.likeState == .liked ? 1.18 : 1.0)
                 .animation(.spring(response: 0.3, dampingFraction: 0.5),
@@ -519,7 +510,7 @@ struct ContentView: View {
             Image(systemName: service.currentTrack.likeState == .disliked
                   ? "hand.thumbsdown.fill" : "hand.thumbsdown")
                 .font(.system(size: 14, weight: .medium))
-                .foregroundStyle(service.currentTrack.likeState == .disliked
+                .foregroundColor(service.currentTrack.likeState == .disliked
                                  ? Color(red: 1, green: 0.32, blue: 0.32) : Color.secondary)
                 .scaleEffect(service.currentTrack.likeState == .disliked ? 1.18 : 1.0)
                 .animation(.spring(response: 0.3, dampingFraction: 0.5),
@@ -576,11 +567,11 @@ struct ContentView: View {
                 HStack {
                     Text(formatDuration(elapsedSeconds))
                         .font(.system(size: 9, design: .monospaced))
-                        .foregroundStyle(.secondary)
+                        .foregroundColor(.secondary)
                     Spacer()
                     Text(formatDuration(dur))
                         .font(.system(size: 9, design: .monospaced))
-                        .foregroundStyle(.secondary)
+                        .foregroundColor(.secondary)
                 }
             }
             .padding(.horizontal, 16)
@@ -594,16 +585,15 @@ struct ContentView: View {
     private var permissionsAlert: some View {
         HStack(spacing: 8) {
             Image(systemName: "person.crop.circle.badge.plus")
-                .foregroundStyle(Color.ymYellow)
+                .foregroundColor(Color.ymYellow)
                 .font(.system(size: 13))
             Text(tr("Войдите в Яндекс — для избранного", "Sign in to Yandex — for favorites"))
                 .font(.system(size: 11))
-                .foregroundStyle(.secondary)
+                .foregroundColor(.secondary)
             Spacer()
             Button(tr("Войти", "Sign in")) { loginYandex() }
-                .buttonStyle(.bordered)
                 .controlSize(.small)
-                .tint(Color.ymYellow)
+                .accentColor(Color.ymYellow)
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 10)
@@ -624,7 +614,7 @@ struct ContentView: View {
                     .font(.system(size: 11, weight: .medium))
                     .opacity(0.55)
             }
-            .foregroundStyle(Color.ymYellow)
+            .foregroundColor(Color.ymYellow)
             .padding(.horizontal, 16)
             .padding(.vertical, 11)
             .frame(maxWidth: .infinity)
@@ -640,12 +630,11 @@ struct ContentView: View {
         HStack {
             Spacer()
             Button(action: {
-                openWindow(id: "main")
-                NSApp.activate(ignoringOtherApps: true)
+                NotificationCenter.default.post(name: .showMainWindow, object: nil)
             }) {
                 Image(systemName: "gearshape")
                     .font(.system(size: 14))
-                    .foregroundStyle(.secondary)
+                    .foregroundColor(.secondary)
             }
             .buttonStyle(.plain)
             .help(tr("Открыть приложение и настройки", "Open app and settings"))
@@ -653,7 +642,7 @@ struct ContentView: View {
             Button(action: { NSApp.terminate(nil) }) {
                 Image(systemName: "power")
                     .font(.system(size: 14))
-                    .foregroundStyle(.secondary)
+                    .foregroundColor(.secondary)
             }
             .buttonStyle(.plain)
             .help(tr("Завершить приложение", "Quit app"))

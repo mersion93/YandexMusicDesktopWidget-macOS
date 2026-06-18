@@ -53,7 +53,6 @@
 			dstPath = "";
 			dstSubfolderSpec = 13;
 			files = (
-				AA0000000000000000000321 /* YandexMusicDesktopWidgetExtension.appex in Embed App Extensions */,
 			);
 			name = "Embed App Extensions";
 			runOnlyForDeploymentPostprocessing = 0;
@@ -188,7 +187,6 @@
 			buildRules = (
 			);
 			dependencies = (
-				AA0000000000000000000332 /* PBXTargetDependency */,
 			);
 			name = YandexMusicDesktopWidget;
 			productName = YandexMusicDesktopWidget;
@@ -371,7 +369,7 @@
 				INFOPLIST_FILE = YandexMusicDesktopWidget/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = "Яндекс Музыка Виджет";
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.music";
-				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				MACOSX_DEPLOYMENT_TARGET = 11.0;
 				MARKETING_VERSION = 1;
 				PRODUCT_BUNDLE_IDENTIFIER = com.yandexmusic.widget;
 				PRODUCT_NAME = "$(TARGET_NAME)";
@@ -394,7 +392,7 @@
 				INFOPLIST_FILE = YandexMusicDesktopWidget/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = "Яндекс Музыка Виджет";
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.music";
-				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				MACOSX_DEPLOYMENT_TARGET = 11.0;
 				MARKETING_VERSION = 1;
 				PRODUCT_BUNDLE_IDENTIFIER = com.yandexmusic.widget;
 				PRODUCT_NAME = "$(TARGET_NAME)";
