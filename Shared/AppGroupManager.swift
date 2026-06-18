@@ -26,6 +26,10 @@ final class AppGroupManager {
 
     var isAvailable: Bool { containerURL != nil }
 
+    /// Каталог App Group-контейнера — для наблюдения за изменениями файлов
+    /// (виджет пишет сюда команды; приложение реагирует мгновенно через DispatchSource).
+    var containerDirectory: URL? { containerURL }
+
     private func fileURL(_ name: String) -> URL? {
         containerURL?.appendingPathComponent(name)
     }

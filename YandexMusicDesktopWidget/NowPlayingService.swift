@@ -159,6 +159,11 @@ final class NowPlayingService: ObservableObject {
         }
         NowPlayingStreamer.shared.start()
 
+        // Команды из виджета (next/prev/like/…) пишутся в App Group файл. Чтобы кнопки
+        // виджета срабатывали мгновенно, а не ждали тика опроса, следим за каталогом
+        // контейнера и выполняем команду сразу по факту записи.
+        startPendingWatcher()
+
         // Если уже авторизованы — подгружаем список лайков (для синхронизации статуса)
         YandexMusicAPI.shared.refreshOnLaunch()
         // Периодически обновляем лайки — на случай, если трек лайкнули в самой ЯМ.
@@ -182,6 +187,8 @@ final class NowPlayingService: ObservableObject {
         timerCancellable = nil
         likesTimer?.cancel()
         likesTimer = nil
+        pendingWatchSource?.cancel()
+        pendingWatchSource = nil
         NSWorkspace.shared.notificationCenter.removeObserver(self)
         YMAccessibilityObserver.shared.stop()
         NowPlayingStreamer.shared.stop()
@@ -683,6 +690,31 @@ final class NowPlayingService: ObservableObject {
         guard currentTrack.id == track.id, currentTrack.artworkData != data else { return }
         currentTrack.artworkData = data
         publishToWidget(currentTrack)   // название+HD-обложка атомарно, если контент сменился
+    }
+
+    // Наблюдатель за каталогом App Group: реагирует на запись команды виджетом мгновенно
+    // (вместо ожидания тика опроса). Каталог, а не файл: запись атомарная (rename),
+    // поэтому inode файла меняется — следить надо за стабильным inode каталога.
+    private var pendingWatchSource: DispatchSourceFileSystemObject?
+
+    private func startPendingWatcher() {
+        guard pendingWatchSource == nil,
+              let dir = AppGroupManager.shared.containerDirectory else { return }
+        let fd = open(dir.path, O_EVTONLY)
+        guard fd >= 0 else { return }
+        let src = DispatchSource.makeFileSystemObjectSource(
+            fileDescriptor: fd, eventMask: [.write], queue: .main)
+        src.setEventHandler { [weak self] in self?.checkPendingAction() }
+        src.setCancelHandler { close(fd) }
+        pendingWatchSource = src
+        src.resume()
+    }
+
+    /// Дёшево проверяет, есть ли команда виджета; если нет — сразу выходит (не сканируя
+    /// процессы). Срабатывает на любую запись в каталог, поэтому важно быть лёгким.
+    private func checkPendingAction() {
+        guard AppGroupManager.shared.loadPendingAction() != .none else { return }
+        processPendingAction(pid: yandexMusicApp()?.processIdentifier)
     }
 
     /// Выполняет команду из виджета. Медиаклавиши (play/next/prev) работают для любого
