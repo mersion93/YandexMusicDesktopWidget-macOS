@@ -29,7 +29,7 @@ HD artwork, likes, and playback controls.
 
 ## 📥 Installation
 
-1. Download **`YandexMusicDesktopWidget-1.0.0.dmg`** from **[Releases](../../releases/latest)**.
+1. Download the latest **`.dmg`** from **[Releases](../../releases/latest)**.
 2. Open the DMG and drag the app into **Applications**.
 3. **First launch.** The app is free and not signed with a paid Apple ID, so macOS asks for
    confirmation **once** — choose either way:
