@@ -34,8 +34,11 @@ codesign --force --sign - --options runtime --timestamp=none \
   --entitlements "$ENT_WIDGET" "$WIDGET"
 
 echo "▸ Подпись основного приложения (ad-hoc, library validation off)"
+# БЕЗ --deep: вложенные (адаптер-framework + appex) уже подписаны выше; --deep
+# переподписал бы вендорный MediaRemoteAdapter.framework и портил печать бандла
+# (codesign --verify проходит, но LaunchServices/pkd отвергают → виджета нет в галерее).
 codesign --force --sign - --options runtime --timestamp=none \
-  --entitlements "$ENT_APP" --deep "$APP"
+  --entitlements "$ENT_APP" "$APP"
 
 echo "▸ Проверка подписи"
 codesign --verify --deep --strict --verbose=2 "$APP" 2>&1 | tail -3 || true
